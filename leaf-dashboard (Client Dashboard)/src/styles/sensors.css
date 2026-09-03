@@ -1,0 +1,132 @@
+/* ============================================================
+   sensors.css
+   Sensors page
+   ============================================================ */
+.sensors, .nodes {
+  background: var(--glass);
+  border-radius: var(--r-md);
+  padding: 18px;
+  box-shadow: var(--card-shadow);
+  border: 1px solid var(--glass-border);
+  backdrop-filter: blur(8px);
+}
+
+.sensor-group-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--leaf-3);
+  padding: 8px 12px;
+  background: var(--leaf-1);
+  border-left: 3px solid var(--leaf-3);
+  border-radius: 0 var(--r-sm) var(--r-sm) 0;
+  margin-bottom: 10px;
+}
+
+.theme-dark .sensor-group-label {
+  color: var(--leaf-2);
+  background: rgba(192, 132, 245, 0.09);
+  border-left-color: var(--leaf-2);
+}
+
+.reservoir-group-label {
+  border-left-color: #1691a6;
+  color: #1691a6;
+  background: rgba(22, 145, 166, 0.07);
+}
+
+.theme-dark .reservoir-group-label {
+  border-left-color: #4fd3e8;
+  color: #4fd3e8;
+  background: rgba(79, 211, 232, 0.08);
+}
+
+.reservoir-alert-pill {
+  margin-left: auto;
+  background: rgba(212, 63, 70, 0.1);
+  color: var(--danger);
+  border: 1px solid rgba(212, 63, 70, 0.26);
+  border-radius: var(--r-pill);
+  padding: 2px 10px;
+  font-size: 10px;
+  font-weight: 700;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+.theme-dark .reservoir-alert-pill { background: rgba(242, 85, 90, 0.18); }
+
+.sensor-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+
+.sensor-card {
+  background: rgba(124, 63, 209, 0.025);
+  border-radius: var(--r-sm);
+  padding: 13px;
+  border: 1px solid var(--glass-border);
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.theme-dark .sensor-card { background: rgba(255, 255, 255, 0.025); }
+
+.sensor-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(35, 15, 55, 0.08);
+}
+
+.theme-dark .sensor-card:hover { box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35); }
+
+.sensor-card-danger {
+  border-color: rgba(212, 63, 70, 0.4) !important;
+  background: rgba(212, 63, 70, 0.05) !important;
+  animation: alertPulse 2.5s ease-in-out infinite;
+}
+
+.theme-dark .sensor-card-danger { background: rgba(242, 85, 90, 0.08) !important; }
+
+.sensor-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 7px;
+}
+
+.sensor-header h4 {
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.btn-edit {
+  background: transparent;
+  border: 1px solid var(--glass-border);
+  padding: 4px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: all 0.15s;
+  line-height: 1;
+}
+
+.btn-edit:hover { background: var(--leaf-1); border-color: var(--leaf-2); }
+.theme-dark .btn-edit:hover { background: rgba(255, 255, 255, 0.06); }
+
+.sensor-value {
+  font-family: var(--font-mono);
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--leaf-3);
+  margin: 5px 0 4px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+
+.theme-dark .sensor-value { color: var(--leaf-2); }
+.sensor-value-danger { color: var(--danger) !important; font-size: 19px !important; }
+
+.sensor-meta { font-size: 10px; color: var(--muted); margin-bottom: 2px; }

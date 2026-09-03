@@ -1,0 +1,64 @@
+/* ============================================================
+   base.css
+   Global resets, page backdrop, floating leaf particles, app shell
+   ============================================================ */
+
+html, body, #root {
+  height: 100%;
+  margin: 0;
+  min-height: 100vh;
+}
+
+body {
+  background: radial-gradient(1100px 620px at 14% -8%, var(--leaf-1) 0%, transparent 60%),
+              linear-gradient(165deg, var(--bg-1) 0%, var(--bg-2) 100%);
+  color: var(--text-primary);
+  overscroll-behavior: none;
+}
+
+h1, h2, h3, h4 {
+  font-family: var(--font-display);
+  letter-spacing: -0.01em;
+}
+
+/* ── Leaf particles — a quiet ambient detail, not the main event ────── */
+.leaf-field {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  overflow: hidden;
+}
+
+.floating-leaf {
+  position: absolute;
+  width: 34px;
+  height: 34px;
+  transform-origin: center;
+  opacity: 0.24;
+  animation: floaty 12s ease-in-out infinite;
+  will-change: transform;
+  filter: drop-shadow(0 3px 6px rgba(10, 40, 10, 0.06));
+}
+
+.theme-dark .floating-leaf {
+  opacity: 0.16;
+  filter: drop-shadow(0 3px 8px rgba(0, 0, 0, 0.4));
+}
+
+@keyframes floaty {
+  0%, 100% { transform: translateY(0px); }
+  40%       { transform: translateY(-12px); }
+  70%       { transform: translateY(5px); }
+}
+
+/* ── App shell ──────────────────────────────────────────────────────── */
+.app {
+  display: flex;
+  gap: 18px;
+  min-height: 100vh;
+  position: relative;
+  z-index: 1;
+  padding: 18px;
+  box-sizing: border-box;
+}

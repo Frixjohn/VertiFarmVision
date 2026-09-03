@@ -1,0 +1,28 @@
+/* ═══════════════════════════════════════════════════════════════════════
+   VertiFarmVision — stylesheet entry point
+   The actual rules live in ./styles/*.css, split by section. Import order
+   matters (later files can override earlier ones), so keep it matching
+   the original single-file cascade: tokens → base → layout → components
+   → pages → overlays → responsive (always last).
+   ═══════════════════════════════════════════════════════════════════════ */
+
+@import "./styles/variables.css";
+@import "./styles/base.css";
+@import "./styles/sidebar.css";
+@import "./styles/layout.css";
+@import "./styles/buttons.css";
+@import "./styles/notifications.css";
+@import "./styles/alerts.css";
+@import "./styles/stats.css";
+@import "./styles/section-header.css";
+@import "./styles/reservoir.css";
+@import "./styles/aflc.css";
+@import "./styles/charts.css";
+@import "./styles/sensors.css";
+@import "./styles/nodes.css";
+@import "./styles/settings.css";
+@import "./styles/modal.css";
+@import "./styles/toasts.css";
+@import "./styles/login.css";
+@import "./styles/legacy.css";
+@import "./styles/responsive.css";

@@ -1,0 +1,74 @@
+/* ============================================================
+   reservoir.css
+   Reservoir strip widget
+   ============================================================ */
+.reservoir-strip {
+  background: var(--glass);
+  border-radius: var(--r-md);
+  padding: 16px 18px;
+  box-shadow: var(--card-shadow);
+  border: 1px solid var(--glass-border);
+  backdrop-filter: blur(8px);
+}
+
+.reservoir-strip-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.reservoir-strip-title h3 {
+  margin: 0;
+  font-size: 14.5px;
+  font-weight: 700;
+}
+
+.reservoir-strip-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+}
+
+.res-strip-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 12px;
+  background: rgba(124, 63, 209, 0.03);
+  border-radius: var(--r-sm);
+  border: 1px solid var(--glass-border);
+  transition: transform var(--transition-fast);
+}
+
+.res-strip-item:hover { transform: translateY(-1px); }
+.theme-dark .res-strip-item { background: rgba(255, 255, 255, 0.025); }
+
+.res-strip-icon { font-size: 20px; flex-shrink: 0; }
+
+.res-strip-label {
+  font-size: 10.5px;
+  color: var(--muted);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.res-strip-value {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+  font-family: var(--font-mono);
+}
+
+.water-level-ok    { border-color: rgba(46, 158, 91, 0.24) !important; background: rgba(46, 158, 91, 0.05) !important; }
+.water-level-danger {
+  border-color: rgba(212, 63, 70, 0.4) !important;
+  background: rgba(212, 63, 70, 0.05) !important;
+  animation: alertPulse 2s ease-in-out infinite;
+}
+.water-level-danger .res-strip-value { color: var(--danger); font-size: 12px; }
+
+/* Sensor status inline */
+.sensor-status { font-size: 12px; font-weight: 500; }

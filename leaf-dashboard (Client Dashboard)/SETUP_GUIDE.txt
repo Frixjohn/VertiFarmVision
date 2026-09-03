@@ -1,0 +1,123 @@
+# 🌱 FarmDash — Setup Guide
+# How to connect React → Express → PostgreSQL
+
+==============================================================
+## STEP 1 — Set up the PostgreSQL database
+==============================================================
+
+1. Open pgAdmin (or psql in terminal)
+2. Create a new database called: farmdash
+3. Open the Query Tool and run the file: database_schema.sql
+   - This creates all tables: nodes, sensor_readings, irrigation_log, aflc_decisions
+   - It also inserts node1 and node2 starter data
+
+==============================================================
+## STEP 2 — Configure the backend .env file
+==============================================================
+
+Open the file called `.env` in the SERVER folder.
+Fill in your actual Postgres details:
+
+  DB_USER=postgres
+  DB_HOST=localhost
+  DB_NAME=farmdash
+  DB_PASSWORD=YOUR_ACTUAL_PASSWORD   ← change this!
+  DB_PORT=5432
+  PORT=3001
+
+==============================================================
+## STEP 3 — Start the backend (Express) server
+==============================================================
+
+Open a terminal and go into the SERVER folder:
+
+  cd server
+  npm install
+  npm run dev
+
+You should see:
+  ✅ Connected to PostgreSQL database
+  🚀 FarmDash API server running on http://localhost:3001
+
+Leave this terminal open and running.
+
+==============================================================
+## STEP 4 — Start the frontend (React / Vite)
+==============================================================
+
+Open a SECOND terminal and go into the CLIENT folder
+(the one with package.json and vite.config.js):
+
+  npm install
+  npm run dev
+
+You should see:
+  VITE v5.x  ready in Xms
+  ➜  Local:   http://localhost:5173/
+
+Open http://localhost:5173 in your browser.
+
+==============================================================
+## STEP 5 — Verify it's working
+==============================================================
+
+✅ The sidebar shows "🟢 DB Connected"
+✅ Node 1 and Node 2 data loads from Postgres
+✅ Dashboard auto-refreshes every 10 seconds
+✅ Editing a sensor value saves it to the database
+✅ Clicking "Manual Irrigate" logs to irrigation_log table
+
+==============================================================
+## WHAT CHANGED IN App.jsx
+==============================================================
+
+The original App.jsx used hardcoded static data like this:
+  const [nodeData, setNodeData] = useState({ node1: { temperature: 24.5 ... } })
+
+The fixed App.jsx now:
+1. Fetches live data from GET  http://localhost:3001/api/nodes
+2. Saves sensor edits  to PUT  http://localhost:3001/api/nodes/:id/sensors
+3. Triggers irrigation via POST http://localhost:3001/api/nodes/:id/irrigate
+4. Logs AFLC decisions  to POST http://localhost:3001/api/aflc/:id
+5. Polls every 10 seconds so the UI stays live
+6. Shows a 🔴/🟡/🟢 connection badge in the sidebar
+7. Falls back to static data if the backend is offline
+
+==============================================================
+## TROUBLESHOOTING
+==============================================================
+
+❌ "DB Offline" badge / failed to fetch
+   → Make sure the backend server is running (Step 3)
+   → Make sure DB_PASSWORD in .env is correct
+   → Make sure the database is called "farmdash" (not "mywebsite")
+
+❌ CORS error in browser console
+   → The server already has cors() enabled for all origins
+   → Make sure you're running the frontend on port 5173
+
+❌ "relation nodes does not exist"
+   → You need to run database_schema.sql first (Step 1)
+
+❌ db.js uses ES module syntax (import/export) but server.js uses require()
+   → The included server.js uses require() consistently
+   → Do NOT mix the old db.js (which uses import) with server.js
+
+==============================================================
+## FILE STRUCTURE
+==============================================================
+
+farmdash/
+├── src/
+│   ├── App.jsx          ← FIXED — now connects to backend
+│   ├── index.css        ← unchanged
+│   └── main.jsx         ← unchanged
+├── server/
+│   ├── server.js        ← Express API (all routes)
+│   ├── .env             ← YOUR database credentials go here
+│   ├── .env.example     ← template
+│   ├── database_schema.sql ← run this in pgAdmin first
+│   └── package.json     ← backend dependencies
+├── index.html
+├── package.json         ← frontend dependencies
+└── vite.config.js

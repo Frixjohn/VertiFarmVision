@@ -1,0 +1,184 @@
+/* ============================================================
+   buttons.css
+   Button variants and states
+   ============================================================ */
+.btn {
+  border: none;
+  padding: 8px 14px;
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 13px;
+  transition: all var(--transition-fast);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  line-height: 1.4;
+}
+
+.btn:hover:not(:disabled) {
+  filter: brightness(0.95);
+  transform: translateY(-1px);
+}
+
+.btn:active:not(:disabled) { transform: translateY(0); }
+
+.btn-icon { font-size: 14px; line-height: 1; }
+
+.btn.primary {
+  background: var(--leaf-3);
+  color: #fff;
+  box-shadow: 0 2px 10px rgba(124, 63, 209, 0.28);
+}
+
+.theme-dark .btn.primary { background: var(--leaf-2); color: #1a0f28; box-shadow: 0 2px 14px rgba(192, 132, 245, 0.25); }
+
+.btn.ghost {
+  background: transparent;
+  border: 1px solid var(--glass-border);
+  color: var(--text-primary);
+}
+
+.theme-dark .btn.ghost {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.09);
+}
+
+.btn.ghost:hover:not(:disabled) {
+  background: var(--leaf-1);
+  border-color: var(--leaf-2);
+}
+
+.theme-dark .btn.ghost:hover:not(:disabled) {
+  background: rgba(192, 132, 245, 0.1);
+  border-color: rgba(192, 132, 245, 0.3);
+}
+
+button:focus-visible, .nav-btn:focus-visible {
+  outline: 2px solid var(--leaf-3);
+  outline-offset: 2px;
+}
+
+.theme-dark button:focus-visible { outline-color: var(--leaf-2); }
+
+/* Action buttons (Motor / Camera / etc) */
+.btn-action {
+  padding: 9px 18px;
+  border: none;
+  border-radius: var(--r-sm);
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  white-space: nowrap;
+}
+
+.btn-action:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none !important;
+  filter: none !important;
+}
+
+.btn-action:not(:disabled):hover {
+  transform: translateY(-1px);
+  filter: brightness(1.06);
+}
+
+.btn-action-motor {
+  background: var(--info);
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(47, 127, 209, 0.25);
+}
+
+.btn-action-camera {
+  background: var(--leaf-3);
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(124, 63, 209, 0.25);
+}
+
+.theme-dark .btn-action-camera { background: var(--leaf-2); color: #1a0f28; }
+
+/* Reservoir action row */
+.res-action-row {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  padding: 6px 0 2px;
+}
+
+/* Irrigate all banner */
+.irrigate-banner {
+  background: linear-gradient(135deg, var(--leaf-3) 0%, var(--leaf-4) 100%);
+  border-radius: var(--r-lg);
+  padding: 22px 26px;
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  box-shadow: 0 8px 26px rgba(82, 41, 143, 0.28);
+  flex-wrap: wrap;
+  position: relative;
+  overflow: hidden;
+}
+
+.irrigate-banner::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(220px 140px at 88% 0%, rgba(255, 255, 255, 0.16), transparent 70%);
+  pointer-events: none;
+}
+
+.irrigate-banner.irrigating {
+  background: linear-gradient(135deg, var(--leaf-4) 0%, #2a1a48 100%);
+}
+
+.irrigate-banner-text h4 {
+  margin: 0 0 4px;
+  font-size: 17px;
+  font-weight: 700;
+  color: #fff;
+}
+
+.irrigate-banner-text p {
+  margin: 0;
+  font-size: 12.5px;
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.btn-irrigate-all {
+  background: #fff;
+  color: var(--leaf-3);
+  border: none;
+  padding: 11px 26px;
+  border-radius: var(--r-sm);
+  font-weight: 700;
+  font-size: 13.5px;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 1;
+}
+
+.btn-irrigate-all:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18);
+}
+
+.btn-irrigate-all:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+  background: rgba(255, 255, 255, 0.7);
+}

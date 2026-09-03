@@ -1,0 +1,635 @@
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ *  EXPRESS BACKEND — server.js
+ *  farmdash · PostgreSQL
+ *
+ *  Install:
+ *    npm install express pg cors dotenv bcryptjs jsonwebtoken ws
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+
+const express    = require('express');
+const { Pool }   = require('pg');
+const cors       = require('cors');
+const bcrypt     = require('bcryptjs');
+const jwt        = require('jsonwebtoken');
+const { WebSocketServer } = require('ws');
+const http       = require('http');
+require('dotenv').config();
+
+const app    = express();
+const server = http.createServer(app);
+
+// ── PostgreSQL Connection Pool ────────────────────────────────────────────────
+const pool = new Pool({
+  host:     process.env.DB_HOST     || 'localhost',
+  port:     process.env.DB_PORT     || 5432,
+  database: process.env.DB_NAME     || 'farmdash',
+  user:     process.env.DB_USER     || 'postgres',
+  password: process.env.DB_PASSWORD || '',
+});
+
+pool.connect()
+  .then(() => console.log('✅ PostgreSQL connected'))
+  .catch(err => console.error('❌ PostgreSQL connection error:', err));
+
+// ── Middleware ────────────────────────────────────────────────────────────────
+app.use(cors({
+  origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+  credentials: true,
+}));
+app.use(express.json());
+
+// ── JWT Auth Middleware ───────────────────────────────────────────────────────
+function requireAuth(req, res, next) {
+  const token = req.headers.authorization?.split(' ')[1];
+  if (!token) return res.status(401).json({ message: 'No token provided' });
+  try {
+    req.user = jwt.verify(token, process.env.JWT_SECRET || 'dev-secret');
+    next();
+  } catch {
+    res.status(401).json({ message: 'Invalid or expired token' });
+  }
+}
+
+// ── WebSocket ─────────────────────────────────────────────────────────────────
+const wss       = new WebSocketServer({ server });
+const wsClients = new Set();
+
+wss.on('connection', (ws) => {
+  wsClients.add(ws);
+  console.log('🟢 WebSocket client connected');
+  ws.on('close', () => wsClients.delete(ws));
+});
+
+function broadcast(data) {
+  const message = JSON.stringify(data);
+  wsClients.forEach(ws => {
+    if (ws.readyState === ws.OPEN) ws.send(message);
+  });
+}
+
+// ── Motor command flag — set by frontend, consumed by ESP32 on next POST ─────
+let motorCommandPending = false;
+
+// ── Camera command flag — set by frontend, consumed by ESP32 on next upload ──
+let cameraCommandPending = false;
+
+// ── Irrigation command flag — set by /api/irrigate-all, consumed by ESP32 on next POST ──
+let irrigationCommandPending = false;
+
+// ═════════════════════════════════════════════════════════════════════════════
+//  AUTH ROUTES
+// ═════════════════════════════════════════════════════════════════════════════
+
+// POST /api/auth/login
+app.post('/api/auth/login', async (req, res) => {
+  const { email, password } = req.body;
+  try {
+    const result = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
+    const user   = result.rows[0];
+    if (!user) return res.status(401).json({ message: 'Invalid credentials' });
+
+    const valid = await bcrypt.compare(password, user.password);
+    if (!valid) return res.status(401).json({ message: 'Invalid credentials' });
+
+    const token = jwt.sign(
+      { id: user.id, email: user.email },
+      process.env.JWT_SECRET || 'dev-secret',
+      { expiresIn: '7d' }
+    );
+    res.json({ token, user: { id: user.id, email: user.email } });
+  } catch (err) {
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+});
+
+// POST /api/auth/logout
+app.post('/api/auth/logout', (req, res) => res.json({ success: true }));
+
+// GET /api/auth/me
+app.get('/api/auth/me', requireAuth, async (req, res) => {
+  try {
+    const result = await pool.query(
+      'SELECT id, email FROM users WHERE id = $1', [req.user.id]
+    );
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+//  SENSOR DATA — called by ESP32 every 30s, no auth token needed
+// ═════════════════════════════════════════════════════════════════════════════
+
+// POST /api/sensor-data
+app.post('/api/sensor-data', async (req, res) => {
+  const { node_id, temperature, humidity, soil_moisture, soil_ph, lux } = req.body;
+
+  if (!node_id) return res.status(400).json({ message: 'node_id is required' });
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    // 1. UPSERT the live node row
+    await client.query(
+      `INSERT INTO nodes (node_id, name, layer_number, temperature, humidity, soil_moisture, soil_ph, lux)
+       VALUES ($1, $1, 1, $2, $3, $4, $5, $6)
+       ON CONFLICT (node_id) DO UPDATE SET
+         temperature   = COALESCE(EXCLUDED.temperature,   nodes.temperature),
+         humidity      = COALESCE(EXCLUDED.humidity,      nodes.humidity),
+         soil_moisture = COALESCE(EXCLUDED.soil_moisture, nodes.soil_moisture),
+         soil_ph       = COALESCE(EXCLUDED.soil_ph,       nodes.soil_ph),
+         lux           = COALESCE(EXCLUDED.lux,           nodes.lux),
+         updated_at    = NOW()`,
+      [node_id, temperature ?? null, humidity ?? null, soil_moisture ?? null, soil_ph ?? null, lux ?? null]
+    );
+
+    // 2. Append to history
+    const reading = await client.query(
+      `INSERT INTO sensor_readings (node_id, temperature, humidity, soil_moisture, soil_ph, lux)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       RETURNING *`,
+      [node_id, temperature ?? null, humidity ?? null, soil_moisture ?? null, soil_ph ?? null, lux ?? null]
+    );
+
+    await client.query('COMMIT');
+
+    // 3. Tell connected React tabs to refresh immediately
+    broadcast({ type: 'sensor_update', data: reading.rows[0] });
+
+    // Consume pending irrigation command (one-shot — clears after sending to ESP32)
+    const triggerPump = irrigationCommandPending;
+    if (triggerPump) {
+      irrigationCommandPending = false;
+      console.log(`[PUMP] Irrigation command dispatched to ESP32 (${node_id})`);
+    }
+
+    console.log(`[ESP32] ${node_id} → temp=${temperature} humi=${humidity} soil=${soil_moisture} ph=${soil_ph} lux=${lux}`);
+    res.json({ status: 'ok', data: reading.rows[0], irrigate_pump: triggerPump });
+
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    console.error('Sensor insert error:', err);
+    res.status(500).json({ message: 'Server error', error: err.message });
+  } finally {
+    client.release();
+  }
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+//  NODE ROUTES — consumed by App.jsx
+// ═════════════════════════════════════════════════════════════════════════════
+
+/**
+ * GET /api/nodes
+ * App.jsx maps rows by row.name → nodeData.node1 / nodeData.node2
+ * We alias node_id AS name so the frontend key lookup works.
+ */
+app.get('/api/nodes', requireAuth, async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT
+        id,
+        node_id                                           AS name,
+        node_id,
+        COALESCE(temperature,   24.5)                    AS temperature,
+        COALESCE(humidity,      65.0)                    AS humidity,
+        COALESCE(soil_moisture, 72.0)                    AS soil_moisture,
+        COALESCE(soil_ph,        6.8)                    AS soil_ph,
+        COALESCE(lux,            0.0)                    AS lux,
+        COALESCE(irrigation_status, 'idle')              AS irrigation_status,
+        CASE
+          WHEN last_irrigation IS NULL THEN 'Never'
+          ELSE TO_CHAR(last_irrigation, 'HH12:MI AM')
+        END                                              AS last_irrigation
+      FROM nodes
+      WHERE is_active = true
+      ORDER BY node_id
+    `);
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+});
+
+/**
+ * PUT /api/nodes/:id/sensors
+ * Called by App.jsx when user manually edits a sensor via the slider modal.
+ * Body: { temperature?, humidity?, soilMoisture?, soilPH? }
+ */
+app.put('/api/nodes/:id/sensors', requireAuth, async (req, res) => {
+  const { id } = req.params;
+  // App.jsx sends camelCase — map to snake_case DB columns
+  const { temperature, humidity, soilMoisture, soilPH, lux } = req.body;
+  try {
+    const result = await pool.query(
+      `UPDATE nodes SET
+         temperature   = COALESCE($1, temperature),
+         humidity      = COALESCE($2, humidity),
+         soil_moisture = COALESCE($3, soil_moisture),
+         soil_ph       = COALESCE($4, soil_ph),
+         lux           = COALESCE($5, lux),
+         updated_at    = NOW()
+       WHERE id = $6
+       RETURNING *`,
+      [temperature ?? null, humidity ?? null, soilMoisture ?? null, soilPH ?? null, lux ?? null, id]
+    );
+    if (!result.rows[0]) return res.status(404).json({ message: 'Node not found' });
+
+    // Also log to history
+    const row = result.rows[0];
+    await pool.query(
+      `INSERT INTO sensor_readings (node_id, temperature, humidity, soil_moisture, soil_ph, lux)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
+      [row.node_id, row.temperature, row.humidity, row.soil_moisture, row.soil_ph, row.lux]
+    );
+
+    broadcast({ type: 'sensor_update', nodeId: id });
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+});
+
+/**
+ * POST /api/nodes/:id/irrigate
+ * Called by App.jsx "Manual Irrigate" button.
+ * Body: { triggeredBy: 'manual' }
+ */
+app.post('/api/nodes/:id/irrigate', requireAuth, async (req, res) => {
+  const { id } = req.params;
+  const { triggeredBy = 'manual' } = req.body;
+  try {
+    await pool.query(
+      `UPDATE nodes SET irrigation_status = 'active', updated_at = NOW() WHERE id = $1`,
+      [id]
+    );
+    broadcast({ type: 'irrigation_start', nodeId: id, triggeredBy });
+
+    await pool.query(
+      `INSERT INTO irrigation_log (node_id, triggered_by) VALUES ($1, $2)`,
+      [id, triggeredBy]
+    );
+
+    // Auto-complete after 5 seconds
+    setTimeout(async () => {
+      await pool.query(
+        `UPDATE nodes SET
+           irrigation_status = 'idle',
+           last_irrigation   = NOW(),
+           updated_at        = NOW()
+         WHERE id = $1`,
+        [id]
+      );
+      broadcast({ type: 'irrigation_complete', nodeId: id });
+    }, 5000);
+
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+});
+
+/**
+ * POST /api/irrigate-all
+ * Called by the single system-wide "Irrigate Entire System" button in App.jsx.
+ * 1. Marks every active node as irrigating in the DB.
+ * 2. Sets irrigationCommandPending so the next ESP32 POST receives irrigate_pump:true.
+ * 3. Auto-completes all nodes after 10 s (matches the frontend timer).
+ */
+app.post('/api/irrigate-all', requireAuth, async (req, res) => {
+  const { triggeredBy = 'manual' } = req.body;
+  try {
+    // Mark all active nodes as irrigating
+    const nodes = await pool.query(`SELECT id, node_id FROM nodes WHERE is_active = true`);
+
+    for (const node of nodes.rows) {
+      await pool.query(
+        `UPDATE nodes SET irrigation_status = 'active', updated_at = NOW() WHERE id = $1`,
+        [node.id]
+      );
+      await pool.query(
+        `INSERT INTO irrigation_log (node_id, triggered_by) VALUES ($1, $2)`,
+        [node.id, triggeredBy]
+      );
+    }
+
+    // Signal the ESP32 to fire the pump on its next POST to /api/sensor-data
+    irrigationCommandPending = true;
+
+    broadcast({ type: 'irrigation_start', triggeredBy, scope: 'all' });
+
+    console.log(`[IRRIGATE-ALL] Command issued — ${nodes.rows.length} node(s) marked active, pump flag set`);
+
+    // Auto-complete after 10 s
+    setTimeout(async () => {
+      await pool.query(
+        `UPDATE nodes SET irrigation_status = 'idle', last_irrigation = NOW(), updated_at = NOW()
+         WHERE is_active = true`
+      );
+      broadcast({ type: 'irrigation_complete', scope: 'all' });
+      console.log('[IRRIGATE-ALL] Cycle complete — all nodes reset to idle');
+    }, 10000);
+
+    res.json({ ok: true, nodesTriggered: nodes.rows.length });
+  } catch (err) {
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+});
+
+/**
+ * GET /api/irrigation/command
+ * Polled by ESP32 every 2–3 s. Returns the pending flag and clears it (one-shot).
+ * No auth — device endpoint, same as /api/camera/command.
+ */
+app.get('/api/irrigation/command', (req, res) => {
+  const pending = irrigationCommandPending;
+  if (pending) {
+    irrigationCommandPending = false;
+    console.log('[PUMP] Irrigation command polled by ESP32 — flag cleared');
+  }
+  res.json({ irrigate_pump: pending });
+});
+
+/**
+ * POST /api/aflc/:id
+ * App.jsx logs an AFLC decision every time nodeData changes.
+ * Body: { decision, confidence, reason }
+ */
+app.post('/api/aflc/:id', requireAuth, async (req, res) => {
+  const { id } = req.params;
+  const { decision, confidence, reason } = req.body;
+  try {
+    await pool.query(
+      `INSERT INTO aflc_decisions (node_id, decision, confidence, reason)
+       VALUES ($1, $2, $3, $4)`,
+      [id, decision, confidence, reason]
+    );
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+//  RESERVOIR ROUTES — driven by the ESP32 water-quality board
+//
+//  ESP32 payload (sent every second via POST /api/reservoir):
+//    { ph, ph_raw, ph_voltage, tds_ppm, tds_raw,
+//      turbidity_ntu, turbidity_raw, water_present,
+//      motor_running, motor_state, ts }
+//
+//  DB field mapping:
+//    ph              → water_ph
+//    tds_ppm         → tds
+//    turbidity_ntu   → turbidity
+//    water_present   → water_level_triggered  (INVERTED: present=true means OK,
+//                                              triggered=true means LOW water)
+// ═════════════════════════════════════════════════════════════════════════════
+
+// POST /api/reservoir  — called by ESP32 every second, no auth needed
+app.post('/api/reservoir', async (req, res) => {
+  const {
+    ph, ph_raw, ph_voltage,
+    tds_ppm, tds_raw,
+    turbidity_ntu, turbidity_raw,
+    water_present,
+    motor_running, motor_state,
+    ts,
+  } = req.body;
+
+  // Validate minimum required fields
+  if (ph === undefined && tds_ppm === undefined) {
+    return res.status(400).json({ message: 'No sensor fields received' });
+  }
+
+  // water_present=true  → reservoir has water  → NOT a low-water alert
+  // water_present=false → reservoir is empty   → trigger the alert
+  const water_level_triggered = water_present === undefined ? false : !water_present;
+
+  try {
+    // ── 1. Upsert live reservoir state (single row, id=1) ──────────────────
+    await pool.query(
+      `INSERT INTO reservoir (id, water_ph, tds, turbidity, water_level_triggered,
+                              motor_running, motor_state, updated_at)
+       VALUES (1, $1, $2, $3, $4, $5, $6, NOW())
+       ON CONFLICT (id) DO UPDATE SET
+         water_ph              = EXCLUDED.water_ph,
+         tds                   = EXCLUDED.tds,
+         turbidity             = EXCLUDED.turbidity,
+         water_level_triggered = EXCLUDED.water_level_triggered,
+         motor_running         = EXCLUDED.motor_running,
+         motor_state           = EXCLUDED.motor_state,
+         updated_at            = NOW()`,
+      [
+        ph          ?? null,
+        tds_ppm     ?? null,
+        turbidity_ntu ?? null,
+        water_level_triggered,
+        motor_running ?? null,
+        motor_state   ?? null,
+      ]
+    );
+
+    // ── 2. Append full raw reading to history log ──────────────────────────
+    await pool.query(
+      `INSERT INTO reservoir_log
+         (water_ph, ph_raw, ph_voltage,
+          tds, tds_raw,
+          turbidity, turbidity_raw,
+          water_present, water_level_triggered,
+          motor_running, motor_state)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+      [
+        ph            ?? null,
+        ph_raw        ?? null,
+        ph_voltage    ?? null,
+        tds_ppm       ?? null,
+        tds_raw       ?? null,
+        turbidity_ntu ?? null,
+        turbidity_raw ?? null,
+        water_present ?? null,
+        water_level_triggered,
+        motor_running ?? null,
+        motor_state   ?? null,
+      ]
+    );
+
+    // ── 3. Push live update to all connected React tabs ───────────────────
+    broadcast({ type: 'reservoir_update' });
+
+    // ── 4. Extra broadcast if water just went low ─────────────────────────
+    if (water_level_triggered) {
+      broadcast({ type: 'water_level_alert' });
+    }
+
+    console.log(
+      `[ESP32-RESERVOIR] pH=${ph} (${ph_voltage}V) | TDS=${tds_ppm}ppm | ` +
+      `Turbidity=${turbidity_ntu}NTU | Water=${water_present ? 'OK' : 'LOW!'} | Motor=${motor_state}`
+    );
+
+    // Consume the pending motor command (one-shot — clears after sending)
+    const triggerMotor = motorCommandPending;
+    if (triggerMotor) {
+      motorCommandPending = false;
+      console.log('[MOTOR] Command dispatched to ESP32');
+    }
+
+    res.json({ status: 'ok', motor_command: triggerMotor });
+
+  } catch (err) {
+    console.error('[ESP32-RESERVOIR] Insert error:', err.message);
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+});
+
+// POST /api/reservoir/motor/run — triggered by frontend button, requires auth
+// Sets a one-shot flag that the ESP32 will receive on its next POST
+app.post('/api/reservoir/motor/run', requireAuth, (req, res) => {
+  motorCommandPending = true;
+  console.log('[MOTOR] Command queued — ESP32 will pick it up on next POST');
+  res.json({ ok: true, message: 'Motor command queued for ESP32' });
+});
+
+// GET /api/reservoir  — polled by App.jsx every 8 s, requires auth
+app.get('/api/reservoir', requireAuth, async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM reservoir WHERE id = 1');
+    if (!result.rows[0]) {
+      // No data yet — return safe defaults so the dashboard doesn't crash
+      return res.json({
+        water_ph:              6.2,
+        tds:                   850,
+        turbidity:             12,
+        water_level_triggered: false,
+        motor_running:         false,
+        motor_state:           'STOPPED',
+        updated_at:            null,
+      });
+    }
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+});
+
+// GET /api/reservoir/log  — last N raw readings (for debugging / history panel)
+app.get('/api/reservoir/log', requireAuth, async (req, res) => {
+  const limit = parseInt(req.query.limit) || 50;
+  try {
+    const result = await pool.query(
+      'SELECT * FROM reservoir_log ORDER BY recorded_at DESC LIMIT $1',
+      [limit]
+    );
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+//  CAMERA ROUTES — ESP32-CAM (separate from reservoir)
+//
+//  ESP32-CAM uploads to:   POST /api/camera/upload   (no auth — device endpoint)
+//  Frontend triggers via:  POST /api/camera/capture  (auth required)
+//
+//  Flow:
+//   1. User presses Capture button → POST /api/camera/capture → sets flag
+//   2. ESP32 sends its next image  → POST /api/camera/upload
+//      → server reads flag, clears it, includes camera_command in response
+//      → broadcasts camera_image over WebSocket so dashboard updates instantly
+//   3. (Optional) ESP32 sees camera_command:true → captures again immediately
+// ═════════════════════════════════════════════════════════════════════════════
+
+// GET /api/camera/command — polled by ESP32 every few seconds to check for a
+// pending capture. Lightweight — no image involved. Returns the flag and clears
+// it so only one capture fires per button press.
+app.get('/api/camera/command', (req, res) => {
+  const pending = cameraCommandPending;
+  if (pending) {
+    cameraCommandPending = false;
+    console.log('[CAMERA] Command polled by ESP32 — triggering capture');
+  }
+  res.json({ camera_command: pending });
+});
+
+// POST /api/camera/capture — frontend "Capture" button; requires auth
+app.post('/api/camera/capture', requireAuth, (req, res) => {
+  cameraCommandPending = true;
+  console.log('[CAMERA] Capture command queued — ESP32 will pick it up on next upload');
+  res.json({ ok: true, message: 'Camera capture command queued for ESP32' });
+});
+
+// POST /api/camera/upload — called by ESP32-CAM; no auth token needed
+app.post('/api/camera/upload', (req, res) => {
+  const { image_base64, width, height, file_size } = req.body;
+
+  if (!image_base64) {
+    return res.status(400).json({ message: 'image_base64 is required' });
+  }
+
+  const capturedAt = new Date().toISOString();
+
+  // Broadcast the image to all connected React tabs immediately
+  broadcast({
+    type:      'camera_image',
+    imageData: `data:image/jpeg;base64,${image_base64}`,
+    width:     width     ?? 320,
+    height:    height    ?? 240,
+    fileSize:  file_size ?? 0,
+    capturedAt,
+  });
+
+  console.log(
+    `[ESP32-CAM] Image received — ${width}×${height}px, ${file_size} bytes @ ${capturedAt}`
+  );
+
+  // Consume the pending capture command (one-shot)
+  const triggerCapture = cameraCommandPending;
+  if (triggerCapture) {
+    cameraCommandPending = false;
+    console.log('[CAMERA] Capture command dispatched to ESP32');
+  }
+
+  res.json({ status: 'ok', capturedAt, camera_command: triggerCapture });
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+//  START SERVER
+// ═════════════════════════════════════════════════════════════════════════════
+
+const PORT = process.env.PORT || 3001;
+server.listen(PORT, '0.0.0.0', () =>
+  console.log(`🚀 Server running on http://0.0.0.0:${PORT}`)
+);
+
+app.get('/api/nodes/:id/history', requireAuth, async (req, res) => {
+  const limit = parseInt(req.query.limit) || 20;
+  try {
+    const result = await pool.query(
+      `SELECT * FROM sensor_readings WHERE node_id = (SELECT node_id FROM nodes WHERE id = $1)
+       ORDER BY recorded_at DESC LIMIT $2`,
+      [req.params.id, limit]
+    );
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+});
+
+app.get('/api/nodes/:id/irrigation-log', requireAuth, async (req, res) => {
+  const limit = parseInt(req.query.limit) || 10;
+  try {
+    const result = await pool.query(
+      `SELECT * FROM irrigation_log WHERE node_id = (SELECT node_id FROM nodes WHERE id = $1)
+       ORDER BY triggered_at DESC LIMIT $2`,
+      [req.params.id, limit]
+    );
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+});

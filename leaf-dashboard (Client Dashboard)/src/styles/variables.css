@@ -1,0 +1,85 @@
+/* ============================================================
+   variables.css
+   Design tokens for VertiFarmVision.
+
+   The visual identity is grounded in what a vertical farm's grow
+   room actually looks like: dark aisles lit by violet/magenta
+   full-spectrum LED grow lights, with chlorophyll green reserved
+   for "healthy / on" status rather than used as decoration.
+   Light theme = the same racks seen by daylight through the tent.
+   ============================================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:ital,wght@0,400;0,500;0,600;0,700;1,500&family=IBM+Plex+Mono:wght@500;600&display=swap');
+
+:root {
+  /* ── Surfaces — daylight glasshouse ──────────────────────────── */
+  --bg-1: #f5f2f9;
+  --bg-2: #ece5f4;
+  --glass: rgba(255, 255, 255, 0.86);
+  --glass-border: rgba(43, 21, 66, 0.09);
+  --card-shadow: 0 1px 2px rgba(35, 15, 55, 0.04), 0 10px 26px rgba(35, 15, 55, 0.06);
+
+  /* ── Grow-light accent ramp (primary brand color) ────────────── */
+  --leaf-1: #e6d9f7;
+  --leaf-2: #9c5ce0;
+  --leaf-3: #7c3fd1;
+  --leaf-4: #52298f;
+
+  /* ── Functional semantics ─────────────────────────────────────── */
+  --accent: #c97a1f;
+  --success: #2e9e5b;
+  --warning: #c97a1f;
+  --danger: #d43f46;
+  --info: #2f7fd1;
+
+  /* ── Text ──────────────────────────────────────────────────────── */
+  --text-primary: #201a29;
+  --muted: #6c6478;
+
+  /* ── Radii ─────────────────────────────────────────────────────── */
+  --r-sm: 7px;
+  --r-md: 12px;
+  --r-lg: 18px;
+  --r-pill: 999px;
+
+  /* ── Motion ────────────────────────────────────────────────────── */
+  --transition-fast: 140ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-slow: 340ms cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* ── Type ──────────────────────────────────────────────────────── */
+  --font-body: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-display: 'Space Grotesk', 'Inter', ui-sans-serif, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
+
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.5;
+  color-scheme: light;
+}
+
+/* ── Dark theme — the grow room at night ───────────────────────── */
+.theme-dark,
+html.theme-dark {
+  --bg-1: #0e0c15;
+  --bg-2: #171223;
+  --glass: rgba(23, 18, 33, 0.92);
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --card-shadow: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 12px 30px rgba(0, 0, 0, 0.45);
+
+  --leaf-1: #2b2239;
+  --leaf-2: #c084f5;
+  --leaf-3: #a35cec;
+  --leaf-4: #6f3aa8;
+
+  --accent: #f0a83c;
+  --success: #55d98a;
+  --warning: #f0a83c;
+  --danger: #f2555c;
+  --info: #66b3f5;
+
+  --text-primary: #f1eef7;
+  --muted: #978ca8;
+
+  color: var(--text-primary);
+  color-scheme: dark;
+}

@@ -1,0 +1,105 @@
+/* ============================================================
+   stats.css
+   Stats row - dashboard's signature summary cards
+   ============================================================ */
+.stats-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+}
+
+.stat-card {
+  background: var(--glass);
+  border-radius: var(--r-md);
+  padding: 16px 16px 14px;
+  box-shadow: var(--card-shadow);
+  border: 1px solid var(--glass-border);
+  border-top: 3px solid var(--leaf-3);
+  backdrop-filter: blur(8px);
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.stat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 24px rgba(35, 15, 55, 0.1);
+}
+
+.theme-dark .stat-card:hover { box-shadow: 0 10px 24px rgba(0, 0, 0, 0.45); }
+
+.stat-card.pulse {
+  animation: cardPulse 0.5s ease;
+}
+
+@keyframes cardPulse {
+  0%, 100% { transform: scale(1); }
+  50%       { transform: scale(1.025); }
+}
+
+/* Top-edge accent per metric type */
+.stat-card.stat-teal   { border-top-color: #1691a6; }
+.stat-card.stat-blue   { border-top-color: var(--info); }
+.stat-card.stat-green  { border-top-color: var(--success); }
+.stat-card.stat-purple { border-top-color: var(--leaf-3); }
+.stat-card.stat-orange { border-top-color: var(--warning); }
+
+.stat-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.stat-label-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.stat-icon { font-size: 16px; line-height: 1; }
+
+.stat-label {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+/* The star of the show — big, readable, tabular-mono value */
+.stat-value {
+  font-family: var(--font-mono);
+  font-size: 28px;
+  font-weight: 600;
+  color: var(--leaf-3);
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.theme-dark .stat-value  { color: var(--leaf-2); }
+
+.stat-card.stat-teal  .stat-value { color: #1691a6; }
+.stat-card.stat-blue  .stat-value { color: var(--info); }
+.stat-card.stat-purple .stat-value { color: var(--leaf-3); }
+
+.theme-dark .stat-card.stat-teal  .stat-value { color: #4fd3e8; }
+.theme-dark .stat-card.stat-blue  .stat-value { color: var(--info); }
+.theme-dark .stat-card.stat-purple .stat-value { color: var(--leaf-2); }
+
+.stat-sub {
+  margin-top: 9px;
+  font-size: 11px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--muted);
+}
+
+.live-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--leaf-3);
+  animation: pulse 2s ease-in-out infinite;
+  flex-shrink: 0;
+}
+
+.theme-dark .live-dot { background: var(--leaf-2); }

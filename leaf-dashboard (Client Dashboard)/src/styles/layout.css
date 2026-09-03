@@ -1,0 +1,34 @@
+/* ============================================================
+   layout.css
+   Main content area layout (header row, page title)
+   ============================================================ */
+.main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  z-index: 2;
+  min-width: 0;
+}
+
+.main-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.page-title {
+  margin: 0;
+  font-size: 21px;
+  font-weight: 700;
+  font-family: var(--font-display);
+}
+
+.muted { color: var(--muted); }
+
+.actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}

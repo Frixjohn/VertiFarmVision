@@ -1,0 +1,13 @@
+/* ============================================================
+   legacy.css
+   Legacy classes kept for Dashboard.jsx backward-compatibility
+   (Dashboard.jsx is not currently routed by App.jsx, but the
+   class is kept in sync with .card in case that changes.)
+   ============================================================ */
+.analytics {
+  background: var(--glass);
+  border-radius: var(--r-md);
+  padding: 18px;
+  box-shadow: var(--card-shadow);
+  border: 1px solid var(--glass-border);
+}

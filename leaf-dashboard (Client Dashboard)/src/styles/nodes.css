@@ -1,0 +1,127 @@
+/* ============================================================
+   nodes.css
+   Nodes page
+   ============================================================ */
+.node-cards {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 14px;
+}
+
+.node-detail-card {
+  background: var(--glass);
+  border-radius: var(--r-md);
+  padding: 18px;
+  box-shadow: var(--card-shadow);
+  border: 1px solid var(--glass-border);
+  transition: transform var(--transition-fast);
+  backdrop-filter: blur(8px);
+}
+
+.node-detail-card:hover { transform: translateY(-2px); }
+
+.node-detail-card.waiting {
+  opacity: 0.6;
+  border-style: dashed;
+}
+
+.node-detail-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 14px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--glass-border);
+}
+
+.node-detail-header h3 { margin: 0; font-size: 16px; font-weight: 700; }
+
+.node-status-badge {
+  padding: 3px 10px;
+  border-radius: var(--r-pill);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.node-status-badge.active  { background: rgba(46, 158, 91, 0.12); color: var(--success); border: 1px solid rgba(46, 158, 91, 0.24); }
+.node-status-badge.waiting { background: rgba(201, 122, 31, 0.12); color: var(--warning); border: 1px solid rgba(201, 122, 31, 0.24); }
+.theme-dark .node-status-badge.active  { background: rgba(85, 217, 138, 0.14); border-color: rgba(85, 217, 138, 0.28); }
+.theme-dark .node-status-badge.waiting { background: rgba(240, 168, 60, 0.14); border-color: rgba(240, 168, 60, 0.28); }
+
+.node-detail-body { display: flex; flex-direction: column; gap: 5px; }
+
+.detail-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 10px;
+  background: rgba(124, 63, 209, 0.025);
+  border-radius: var(--r-sm);
+  font-size: 13px;
+}
+
+.theme-dark .detail-row { background: rgba(255, 255, 255, 0.025); }
+.detail-label { color: var(--muted); }
+
+.detail-value {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  color: var(--leaf-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.theme-dark .detail-value { color: var(--leaf-2); }
+
+.waiting-state { text-align: center; padding: 28px 16px; }
+.waiting-icon { font-size: 38px; margin-bottom: 12px; animation: pulse 2s ease-in-out infinite; }
+.waiting-state p { margin: 5px 0; color: var(--muted); font-size: 13px; }
+
+/* Irrigation controls */
+.irrigation-control {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--glass-border);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.irrigation-status { display: flex; justify-content: space-between; align-items: center; font-size: 12px; }
+.irrigation-label { color: var(--muted); font-weight: 500; }
+.irrigation-time  { color: var(--text-primary); font-weight: 700; font-family: var(--font-mono); }
+
+.irrigation-badge {
+  padding: 3px 9px;
+  border-radius: var(--r-pill);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.irrigation-badge.idle   { background: rgba(46, 158, 91, 0.1); color: var(--success); }
+.irrigation-badge.active { background: rgba(47, 127, 209, 0.1); color: var(--info); animation: pulse 1.5s ease-in-out infinite; }
+.theme-dark .irrigation-badge.idle   { background: rgba(85, 217, 138, 0.1); }
+.theme-dark .irrigation-badge.active { background: rgba(102, 179, 245, 0.1); }
+
+.btn-irrigate {
+  background: var(--info);
+  color: white;
+  border: none;
+  padding: 10px 16px;
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 13px;
+  box-shadow: 0 2px 8px rgba(47, 127, 209, 0.25);
+  transition: all 0.18s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.btn-irrigate:hover:not(:disabled) {
+  transform: translateY(-1px);
+  filter: brightness(1.08);
+}
+
+.btn-irrigate:disabled { opacity: 0.5; cursor: not-allowed; }

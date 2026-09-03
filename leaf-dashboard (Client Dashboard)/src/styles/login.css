@@ -1,0 +1,102 @@
+/* ============================================================
+   login.css
+   Login screen — the one deliberate "grow-light" moment: a soft
+   violet glow bloom behind the card, like a fixture overhead.
+   ============================================================ */
+.login-card {
+  position: relative;
+  z-index: 10;
+  background: var(--glass);
+  backdrop-filter: blur(22px);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r-lg);
+  padding: 38px 42px;
+  width: 100%;
+  max-width: 400px;
+  box-shadow: var(--card-shadow), 0 24px 70px rgba(82, 41, 143, 0.14);
+  text-align: center;
+}
+
+.theme-dark .login-card { box-shadow: var(--card-shadow), 0 0 90px rgba(160, 92, 236, 0.16); }
+
+/* the fixture glow, positioned above the card */
+.login-card::before {
+  content: '';
+  position: absolute;
+  top: -120px;
+  left: 50%;
+  width: 320px;
+  height: 220px;
+  transform: translateX(-50%);
+  background: radial-gradient(closest-side, var(--leaf-2) 0%, transparent 72%);
+  opacity: 0.28;
+  filter: blur(6px);
+  z-index: -1;
+  animation: glowBreathe 5s ease-in-out infinite;
+  pointer-events: none;
+}
+
+.theme-dark .login-card::before { opacity: 0.4; }
+
+@keyframes glowBreathe {
+  0%, 100% { opacity: 0.22; transform: translateX(-50%) scale(1); }
+  50%       { opacity: 0.34; transform: translateX(-50%) scale(1.05); }
+}
+
+.login-logo-wrap { display: flex; justify-content: center; margin-bottom: 10px; }
+.login-logo { width: 54px; height: 54px; border-radius: var(--r-sm); box-shadow: 0 0 0 4px var(--leaf-1); }
+
+.login-title {
+  font-family: var(--font-display);
+  color: var(--leaf-3);
+  font-size: 25px;
+  font-weight: 700;
+  margin: 0 0 6px;
+}
+
+.theme-dark .login-title { color: var(--leaf-2); }
+
+.login-sub { font-size: 13px; margin-bottom: 24px; color: var(--muted); }
+
+.login-error {
+  background: rgba(212, 63, 70, 0.07);
+  border: 1px solid rgba(212, 63, 70, 0.24);
+  color: var(--danger);
+  border-radius: var(--r-sm);
+  padding: 9px 12px;
+  font-size: 13px;
+  margin-bottom: 13px;
+  text-align: left;
+}
+
+.theme-dark .login-error { background: rgba(242, 85, 90, 0.12); }
+
+.login-form { display: flex; flex-direction: column; gap: 12px; text-align: left; }
+.login-field { display: flex; flex-direction: column; gap: 4px; }
+.login-label { font-size: 12px; font-weight: 600; }
+
+.login-input {
+  width: 100%;
+  background: rgba(124, 63, 209, 0.03);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r-sm);
+  color: var(--text-primary);
+  font-size: 14px;
+  padding: 9px 12px;
+  outline: none;
+  box-sizing: border-box;
+  transition: border-color 0.17s;
+}
+
+.theme-dark .login-input { background: rgba(255, 255, 255, 0.04); }
+.login-input:focus { border-color: var(--leaf-3); }
+.theme-dark .login-input:focus { border-color: var(--leaf-2); }
+
+.login-btn {
+  margin-top: 4px;
+  width: 100%;
+  justify-content: center;
+  padding: 11px;
+  font-size: 14px;
+  font-weight: 700;
+}

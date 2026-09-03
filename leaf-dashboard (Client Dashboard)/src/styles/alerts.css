@@ -1,0 +1,62 @@
+/* ============================================================
+   alerts.css
+   Water alert banner
+   ============================================================ */
+.water-alert-banner {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 18px;
+  background: rgba(212, 63, 70, 0.07);
+  border: 1.5px solid rgba(212, 63, 70, 0.3);
+  border-radius: var(--r-md);
+  animation: alertPulse 2.5s ease-in-out infinite;
+}
+
+.theme-dark .water-alert-banner {
+  background: rgba(242, 85, 90, 0.1);
+  border-color: rgba(242, 85, 90, 0.4);
+}
+
+@keyframes alertPulse {
+  0%, 100% { box-shadow: none; }
+  50%       { box-shadow: 0 0 0 4px rgba(212, 63, 70, 0.1); }
+}
+
+.water-alert-icon {
+  font-size: 22px;
+  flex-shrink: 0;
+  animation: alertBounce 1.2s ease-in-out infinite;
+}
+
+@keyframes alertBounce {
+  0%, 100% { transform: scale(1); }
+  50%       { transform: scale(1.18); }
+}
+
+.water-alert-body { flex: 1; }
+
+.water-alert-body strong {
+  display: block;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--danger);
+}
+
+.water-alert-body span { font-size: 12px; color: var(--muted); }
+
+.water-alert-dismiss {
+  background: rgba(212, 63, 70, 0.1);
+  border: 1px solid rgba(212, 63, 70, 0.26);
+  color: var(--danger);
+  padding: 6px 14px;
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 12px;
+  flex-shrink: 0;
+  transition: all 0.15s;
+}
+
+.theme-dark .water-alert-dismiss { border-color: rgba(242, 85, 90, 0.4); background: rgba(242, 85, 90, 0.15); }
+.water-alert-dismiss:hover { background: rgba(212, 63, 70, 0.16); }
