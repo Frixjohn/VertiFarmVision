@@ -1,52 +1,58 @@
 /* ============================================================
-   variables.css
-   Design tokens for VertiFarmVision.
+   variables.css — design tokens for VertiFarmVision
 
-   The visual identity is grounded in what a vertical farm's grow
-   room actually looks like: dark aisles lit by violet/magenta
-   full-spectrum LED grow lights, with chlorophyll green reserved
-   for "healthy / on" status rather than used as decoration.
-   Light theme = the same racks seen by daylight through the tent.
+   Identity: the violet of full-spectrum grow lights is the brand
+   colour. Green / amber / red are reserved for STATUS only, so a
+   colour on screen always means something.
    ============================================================ */
 
-@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:ital,wght@0,400;0,500;0,600;0,700;1,500&family=IBM+Plex+Mono:wght@500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap');
 
 :root {
-  /* ── Surfaces — daylight glasshouse ──────────────────────────── */
-  --bg-1: #f5f2f9;
-  --bg-2: #ece5f4;
-  --glass: rgba(255, 255, 255, 0.86);
-  --glass-border: rgba(43, 21, 66, 0.09);
-  --card-shadow: 0 1px 2px rgba(35, 15, 55, 0.04), 0 10px 26px rgba(35, 15, 55, 0.06);
+  /* Surfaces */
+  --bg: #f5f4f8;
+  --surface: #ffffff;
+  --surface-2: #faf9fc;
+  --surface-3: #f1eff7;
+  --border: #e5e1ed;
+  --border-strong: #d2ccdf;
 
-  /* ── Grow-light accent ramp (primary brand color) ────────────── */
-  --leaf-1: #e6d9f7;
-  --leaf-2: #9c5ce0;
-  --leaf-3: #7c3fd1;
-  --leaf-4: #52298f;
+  /* Text (all pairs ≥ 4.5:1 on their surface) */
+  --text: #1c1726;
+  --text-2: #463f55;
+  --muted: #655e72;
 
-  /* ── Functional semantics ─────────────────────────────────────── */
-  --accent: #c97a1f;
-  --success: #2e9e5b;
-  --warning: #c97a1f;
-  --danger: #d43f46;
-  --info: #2f7fd1;
+  /* Brand */
+  --brand: #6b32c8;
+  --brand-hover: #5a27ad;
+  --brand-soft: #efe9fb;
+  --brand-ink: #4b2394;
+  --on-brand: #ffffff;
 
-  /* ── Text ──────────────────────────────────────────────────────── */
-  --text-primary: #201a29;
-  --muted: #6c6478;
+  /* Status */
+  --success: #17804a;  --success-soft: #e4f4ec;
+  --warning: #9a5a08;  --warning-soft: #fdf0dc;
+  --danger:  #c22f39;  --danger-soft:  #fbe7e9;
+  --info:    #1f5db5;  --info-soft:    #e5edfa;
 
-  /* ── Radii ─────────────────────────────────────────────────────── */
-  --r-sm: 7px;
+  /* Chart encoding: Node 1 = violet circle, Node 2 = teal diamond */
+  --series-1: #7a3fd8;
+  --series-2: #0b8599;
+  --band: rgba(23, 128, 74, 0.10);
+  --band-edge: rgba(23, 128, 74, 0.45);
+  --grid: #ebe7f2;
+
+  /* Shape, depth, motion */
+  --r-sm: 8px;
   --r-md: 12px;
-  --r-lg: 18px;
+  --r-lg: 16px;
   --r-pill: 999px;
+  --shadow-sm: 0 1px 2px rgba(28, 23, 38, 0.05);
+  --shadow-md: 0 4px 16px rgba(28, 23, 38, 0.08);
+  --shadow-lg: 0 20px 50px rgba(28, 23, 38, 0.18);
+  --ease: 160ms cubic-bezier(0.4, 0, 0.2, 1);
 
-  /* ── Motion ────────────────────────────────────────────────────── */
-  --transition-fast: 140ms cubic-bezier(0.4, 0, 0.2, 1);
-  --transition-slow: 340ms cubic-bezier(0.4, 0, 0.2, 1);
-
-  /* ── Type ──────────────────────────────────────────────────────── */
+  /* Type — rem so the "Large text" setting scales everything */
   --font-body: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   --font-display: 'Space Grotesk', 'Inter', ui-sans-serif, sans-serif;
   --font-mono: 'IBM Plex Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
@@ -55,31 +61,59 @@
   font-size: 15px;
   line-height: 1.5;
   color-scheme: light;
+
+  /* Legacy aliases — keep pages/Dashboard.jsx and pages/Login.jsx styled */
+  --glass: var(--surface);
+  --glass-border: var(--border);
+  --card-shadow: var(--shadow-md);
+  --text-primary: var(--text);
+  --leaf-1: var(--brand-soft);
+  --leaf-2: #9c5ce0;
+  --leaf-3: var(--brand);
+  --leaf-4: var(--brand-ink);
+  --accent: var(--warning);
+  --bg-1: var(--bg);
+  --bg-2: var(--surface-3);
 }
 
-/* ── Dark theme — the grow room at night ───────────────────────── */
+html.text-large { font-size: 17px; }
+
+/* Dark theme — the grow room at night */
 .theme-dark,
 html.theme-dark {
-  --bg-1: #0e0c15;
-  --bg-2: #171223;
-  --glass: rgba(23, 18, 33, 0.92);
-  --glass-border: rgba(255, 255, 255, 0.08);
-  --card-shadow: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 12px 30px rgba(0, 0, 0, 0.45);
+  --bg: #0f0d16;
+  --surface: #181422;
+  --surface-2: #1d1829;
+  --surface-3: #262035;
+  --border: #2d2742;
+  --border-strong: #40385a;
 
-  --leaf-1: #2b2239;
+  --text: #f2eff8;
+  --text-2: #d0cadf;
+  --muted: #a097b4;
+
+  --brand: #b98af2;
+  --brand-hover: #caa5f6;
+  --brand-soft: rgba(185, 138, 242, 0.15);
+  --brand-ink: #dcc8fb;
+  --on-brand: #1a0f28;
+
+  --success: #55d88b;  --success-soft: rgba(85, 216, 139, 0.14);
+  --warning: #f2b04c;  --warning-soft: rgba(242, 176, 76, 0.14);
+  --danger:  #ff7079;  --danger-soft:  rgba(255, 112, 121, 0.15);
+  --info:    #6db3f7;  --info-soft:    rgba(109, 179, 247, 0.15);
+
+  --series-1: #b98af2;
+  --series-2: #4fd3e8;
+  --band: rgba(85, 216, 139, 0.11);
+  --band-edge: rgba(85, 216, 139, 0.5);
+  --grid: #2a2440;
+
+  --shadow-sm: 0 1px 0 rgba(255, 255, 255, 0.03) inset;
+  --shadow-md: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 8px 24px rgba(0, 0, 0, 0.35);
+  --shadow-lg: 0 24px 60px rgba(0, 0, 0, 0.6);
+
   --leaf-2: #c084f5;
-  --leaf-3: #a35cec;
-  --leaf-4: #6f3aa8;
-
-  --accent: #f0a83c;
-  --success: #55d98a;
-  --warning: #f0a83c;
-  --danger: #f2555c;
-  --info: #66b3f5;
-
-  --text-primary: #f1eef7;
-  --muted: #978ca8;
-
-  color: var(--text-primary);
+  color: var(--text);
   color-scheme: dark;
 }

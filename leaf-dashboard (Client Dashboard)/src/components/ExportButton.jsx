@@ -1,4 +1,6 @@
 import { useState } from "react";
+import Icon from "./Icon";
+import { METRICS, getStatus } from "../config/thresholds";
 
 // ─── AFLC logic (mirrors App.jsx so the exported values match what the UI shows) ──
 function calculateAFLCDecision({ temperature, humidity, co2 }) {
@@ -52,22 +54,19 @@ function buildCSV(nodeData, reservoirData) {
   // ── Reservoir ──────────────────────────────────────────────────────────────
   lines.push(section("RESERVOIR READINGS"));
   lines.push(row("Parameter", "Value", "Unit", "Status"));
-  lines.push(row("Water pH",    reservoirData.waterPH,    "",     reservoirData.waterPH >= 5.5 && reservoirData.waterPH <= 7.0 ? "Optimal" : "Out of range"));
-  lines.push(row("TDS",         reservoirData.tds,        "ppm",  reservoirData.tds >= 500 && reservoirData.tds <= 1500 ? "Optimal" : "Out of range"));
-  lines.push(row("Turbidity",   reservoirData.turbidity,  "NTU",  reservoirData.turbidity < 50 ? "Clear" : "Turbid — check water"));
+  lines.push(row("Water pH",    reservoirData.waterPH,    "",     getStatus("ph", reservoirData.waterPH).state === "ok" ? "Optimal" : "Out of range"));
+  lines.push(row("TDS",         reservoirData.tds,        "ppm",  getStatus("tds", reservoirData.tds).state === "ok" ? "Optimal" : "Out of range"));
+  lines.push(row("Turbidity",   reservoirData.turbidity,  "NTU",  getStatus("turbidity", reservoirData.turbidity).state === "ok" ? "Clear" : "Turbid — check water"));
   lines.push(row("Water Level", reservoirData.waterLevelTriggered ? "LOW" : "Optimal", "", reservoirData.waterLevelTriggered ? "⚠ REFILL REQUIRED" : "OK"));
   lines.push(row("Motor State", reservoirData.motorState, "",     reservoirData.motorRunning ? "Running" : "Idle"));
 
   // ── Optimal ranges reference ───────────────────────────────────────────────
   lines.push(section("OPTIMAL RANGES REFERENCE"));
   lines.push(row("Parameter", "Min", "Max", "Unit"));
-  lines.push(row("Temperature",  22,   26,    "°C"));
-  lines.push(row("Humidity",     60,   75,    "%"));
-  lines.push(row("CO₂",         400, 1200,   "ppm"));
-  lines.push(row("Light",       5000, 80000, "lx"));
-  lines.push(row("Water pH",     5.5,  7.0,   ""));
-  lines.push(row("TDS",          500, 1500,   "ppm"));
-  lines.push(row("Turbidity",    "",   50,    "NTU"));
+  ["temperature", "humidity", "co2", "lux", "ph", "tds", "turbidity"].forEach((k) => {
+    const m = METRICS[k];
+    lines.push(row(m.label, k === "turbidity" ? "" : m.optimal[0], m.optimal[1], m.unit));
+  });
 
   return lines.join("\n");
 }
@@ -98,7 +97,7 @@ export default function ExportButton({
   nodeData,
   reservoirData,
   className  = "btn ghost",
-  label      = "📥 Export Data",
+  label      = "Export data",
   onExported = null,
 }) {
   const [loading, setLoading] = useState(false);
@@ -123,8 +122,8 @@ export default function ExportButton({
       disabled={loading || !nodeData || !reservoirData}
       title="Export all sensor data to a spreadsheet (.csv)"
     >
-      <span className="btn-icon">{loading ? "⏳" : "📊"}</span>
-      {loading ? "Exporting…" : label}
+      <Icon name={loading ? "loader" : "download"} size={16} />
+      <span className="btn-label">{loading ? "Exporting…" : label}</span>
     </button>
   );
 }

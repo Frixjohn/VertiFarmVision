@@ -1,0 +1,17 @@
+# VertiFarmVision ML Service dependencies
+# Install: pip install -r requirements.txt
+
+# PyTorch — CPU-only is fine for inference on most machines
+# If you have a GPU: pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
+torch>=2.0.0
+torchvision>=0.15.0
+
+# API server
+fastapi>=0.110.0
+uvicorn[standard]>=0.29.0
+
+# Image handling
+Pillow>=10.0.0
+
+# Pydantic (FastAPI uses this internally — pinned to v2)
+pydantic>=2.0.0

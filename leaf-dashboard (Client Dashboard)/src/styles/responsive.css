@@ -1,19 +1,48 @@
 /* ============================================================
-   responsive.css
-   Responsive breakpoints (applies overrides from all sections above)
+   responsive.css — always imported last
    ============================================================ */
-@media (max-width: 1100px) {
-  .stats-row              { grid-template-columns: repeat(2, 1fr); }
-  .reservoir-strip-grid   { grid-template-columns: repeat(2, 1fr); }
-  .sensor-grid            { grid-template-columns: repeat(2, 1fr); }
-  .aflc-grid              { grid-template-columns: 1fr; }
-  .charts-grid            { grid-template-columns: 1fr; }
-  .node-cards             { grid-template-columns: 1fr; }
-  .settings-grid          { grid-template-columns: 1fr; }
+
+@media (max-width: 1280px) {
+  .stats-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .grid-3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .sensor-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
-@media (max-width: 768px) {
-  .app { flex-direction: column; padding: 12px; gap: 12px; }
-  .sidebar { width: 100%; }
-  .stats-row { grid-template-columns: repeat(2, 1fr); }
+@media (max-width: 1100px) {
+  .grid-2 { grid-template-columns: 1fr; }
+  .res-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+/* Sidebar → bottom tab bar */
+@media (max-width: 860px) {
+  .sidebar { display: none; }
+  .app { flex-direction: column; }
+  .main { padding: 16px 16px 96px; gap: 16px; }
+  .page-title { font-size: 1.35rem; }
+  .btn-label { display: none; }
+  .icon-btn, .actions .btn { min-width: 40px; height: 40px; }
+
+  .tabbar {
+    display: grid; grid-template-columns: repeat(4, 1fr);
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 900;
+    padding: 6px 8px calc(6px + env(safe-area-inset-bottom));
+    background: var(--surface); border-top: 1px solid var(--border);
+  }
+  .tabbar button {
+    display: flex; flex-direction: column; align-items: center; gap: 3px;
+    padding: 6px 4px; border: 0; border-radius: var(--r-sm); background: transparent;
+    color: var(--muted); font-size: 0.75rem; font-weight: 600; cursor: pointer;
+  }
+  .tabbar button.active { color: var(--brand-ink); background: var(--brand-soft); }
+}
+
+@media (max-width: 640px) {
+  .grid-3, .stats-row, .sensor-grid, .res-grid { grid-template-columns: 1fr; }
+  .stats-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .metric-now { grid-template-columns: 1fr; }
+  .stat-value { font-size: 1.7rem; }
+  .plant-body.with-img { grid-template-columns: 1fr; }
+  .toast-container { left: 18px; }
+  .toast { min-width: 0; max-width: none; }
+  .water-alert-banner { flex-wrap: wrap; }
 }

@@ -1,6 +1,15 @@
 import React, { useEffect, useRef, useState, useMemo, useCallback } from "react";
 import axios from "axios";
 import ExportButton from "./components/ExportButton";
+import Icon from "./components/Icon";
+import { NotificationBell, SensorEditModal, ToastStack } from "./components/ui";
+import OverviewView from "./views/OverviewView";
+import SensorsView from "./views/SensorsView";
+import NodesView from "./views/NodesView";
+import SettingsView from "./views/SettingsView";
+import { computeIssues } from "./config/health";
+import { ENV_METRICS } from "./config/thresholds";
+import { timeAgo, useHistory, useNow } from "./hooks/useDashboardHooks";
 
 // ── Error Boundary — catches render crashes so you see an error instead of a white screen ──
 class ErrorBoundary extends React.Component {
@@ -9,10 +18,10 @@ class ErrorBoundary extends React.Component {
   render() {
     if (this.state.error) {
       return (
-        <div style={{ padding: 40, fontFamily: "monospace", color: "#f44336" }}>
-          <h2>⚠ Dashboard crashed</h2>
-          <pre style={{ whiteSpace: "pre-wrap", fontSize: 13 }}>{String(this.state.error)}</pre>
-          <button onClick={() => window.location.reload()} style={{ marginTop: 16, padding: "8px 20px" }}>Reload</button>
+        <div className="crash">
+          <h2>Dashboard crashed</h2>
+          <pre>{String(this.state.error)}</pre>
+          <button className="btn primary" onClick={() => window.location.reload()}>Reload</button>
         </div>
       );
     }
@@ -41,222 +50,6 @@ api.interceptors.response.use(
   }
 );
 
-// ── Count-up hook ─────────────────────────────────────────────────────────────
-function useCountUp(target, duration = 1000) {
-  const [value, setValue] = useState(0);
-  const rafRef = useRef(null);
-
-  useEffect(() => {
-    const start = performance.now();
-    const from = 0;
-    const to = target;
-
-    function step(now) {
-      const t = Math.min((now - start) / duration, 1);
-      const eased = 1 - Math.pow(1 - t, 4);
-      setValue(Math.round(from + (to - from) * eased));
-      if (t < 1) rafRef.current = requestAnimationFrame(step);
-    }
-
-    rafRef.current = requestAnimationFrame(step);
-    return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); };
-  }, [target, duration]);
-
-  return value;
-}
-
-// ── Leaf Particles ────────────────────────────────────────────────────────────
-const LeafParticles = React.memo(function LeafParticles({ count = 16, theme }) {
-  const [mousePos, setMousePos] = useState({ x: 0.5, y: 0.5 });
-
-  useEffect(() => {
-    const handleMouseMove = (e) => {
-      setMousePos({ x: e.clientX / window.innerWidth, y: e.clientY / window.innerHeight });
-    };
-    window.addEventListener("mousemove", handleMouseMove);
-    return () => window.removeEventListener("mousemove", handleMouseMove);
-  }, []);
-
-  const seeds = useMemo(() => {
-    return Array.from({ length: count }).map((_, i) => ({
-      id: i,
-      left: `${Math.round(Math.random() * 100)}%`,
-      top: `${Math.round(Math.random() * 80)}%`,
-      delay: `${(Math.random() * 5).toFixed(2)}s`,
-      scale: (0.5 + Math.random() * 1.2).toFixed(2),
-      rotate: Math.round(Math.random() * 360),
-      hueShift: Math.round(Math.random() * 50) - 15,
-      parallaxStrength: 0.5 + Math.random() * 1.5,
-    }));
-  }, [count]);
-
-  return (
-    <div className="leaf-field" aria-hidden="true">
-      {seeds.map((s) => (
-        <svg
-          key={s.id}
-          className="floating-leaf"
-          style={{
-            left: s.left,
-            top: s.top,
-            animationDelay: s.delay,
-            transform: `translate(${(mousePos.x - 0.5) * s.parallaxStrength * 30}px, ${(mousePos.y - 0.5) * s.parallaxStrength * 20}px) rotate(${s.rotate}deg) scale(${s.scale})`,
-            filter: `hue-rotate(${s.hueShift}deg)`,
-            transition: "transform 0.3s ease-out",
-          }}
-          viewBox="0 0 64 64"
-          width="52"
-          height="52"
-        >
-          <defs>
-            <linearGradient id={`g${s.id}`} x1="0" x2="1" y1="0" y2="1">
-              <stop offset="0%" stopColor={theme === "dark" ? "#a487e0" : "#b6f0b0"} />
-              <stop offset="60%" stopColor={theme === "dark" ? "#4a7a5c" : "#57b76a"} />
-              <stop offset="100%" stopColor={theme === "dark" ? "#16241c" : "#1f7a3e"} />
-            </linearGradient>
-          </defs>
-          <path
-            d="M2 32 C12 8, 40 2, 62 6 C46 22, 52 46, 34 56 C16 66, 4 54, 2 32 Z"
-            fill={`url(#g${s.id})`}
-            opacity="0.98"
-          />
-          <path
-            d="M14 28 C26 20, 40 18, 54 22"
-            stroke={theme === "dark" ? "#c084f530" : "#ffffff70"}
-            strokeWidth="1.8"
-            fill="none"
-            opacity="0.3"
-          />
-        </svg>
-      ))}
-    </div>
-  );
-});
-
-// ── Animated Bar Chart ────────────────────────────────────────────────────────
-function AnimatedBarChart({ data = [], theme }) {
-  const [hoveredBar, setHoveredBar] = useState(null);
-  const max = useMemo(() => Math.max(...data.map((d) => d.value), 1), [data]);
-
-  return (
-    <div className="chart-outer" role="img" aria-label="Sensor readings chart">
-      {data.map((d, i) => {
-        const heightPct = Math.round((d.value / max) * 100);
-        const isHovered = hoveredBar === i;
-
-        return (
-          <div
-            className="bar-wrap"
-            key={d.label}
-            onMouseEnter={() => setHoveredBar(i)}
-            onMouseLeave={() => setHoveredBar(null)}
-          >
-            <div
-              className={`bar-amount ${isHovered ? "hovered" : ""}`}
-              style={{
-                height: `${heightPct}%`,
-                transitionDelay: `${i * 60}ms`,
-                background: theme === "dark"
-                  ? `linear-gradient(180deg, ${isHovered ? "#c084f5" : "#a35cec"}, ${isHovered ? "#8b4fd9" : "#6f3aa8"})`
-                  : `linear-gradient(180deg, ${isHovered ? "#c9a3f5" : "var(--leaf-2)"}, ${isHovered ? "#8b4fd9" : "var(--leaf-4)"})`,
-              }}
-              title={`${d.label}: ${d.value}${d.unit || ""}`}
-            >
-              {isHovered && (
-                <div className="bar-tooltip">
-                  <strong>{d.value}{d.unit || ""}</strong>
-                  <span>{d.label}</span>
-                </div>
-              )}
-            </div>
-            <div className="bar-label">{d.label}</div>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-// ── Stat Card ─────────────────────────────────────────────────────────────────
-function StatCard({ label, value, accent = "green", theme, icon, unit = "" }) {
-  const animatedValue = useCountUp(value, 1200);
-  const prevValue = useRef(value);
-  const [isIncreasing, setIsIncreasing] = useState(false);
-
-  useEffect(() => {
-    if (value > prevValue.current) {
-      setIsIncreasing(true);
-      setTimeout(() => setIsIncreasing(false), 600);
-    }
-    prevValue.current = value;
-  }, [value]);
-
-  return (
-    <div className={`stat-card stat-${accent} ${isIncreasing ? "pulse" : ""}`} role="region" aria-label={`${label}: ${value}`}>
-      <div className="stat-top">
-        <div className="stat-label-row">
-          {icon && <span className="stat-icon">{icon}</span>}
-          <div className="stat-label">{label}</div>
-        </div>
-        <div className="stat-value" style={{ color: theme === "dark" && accent === "green" ? "#76d493" : undefined }}>
-          {animatedValue}{unit}
-        </div>
-      </div>
-      <div className="stat-sub muted">
-        <span className="live-dot"></span> live
-      </div>
-    </div>
-  );
-}
-
-// ── Toast ─────────────────────────────────────────────────────────────────────
-function Toast({ message, type = "success", onClose }) {
-  useEffect(() => {
-    const timer = setTimeout(onClose, type === "warning" ? 8000 : 3000);
-    return () => clearTimeout(timer);
-  }, [onClose, type]);
-
-  return (
-    <div className={`toast toast-${type}`}>
-      <span className="toast-icon">
-        {type === "success" ? "✅" : type === "error" ? "❌" : type === "warning" ? "⚠️" : "ℹ️"}
-      </span>
-      {message}
-      <button className="toast-close" onClick={onClose}>×</button>
-    </div>
-  );
-}
-
-// ── Sensor Edit Modal ─────────────────────────────────────────────────────────
-function SensorEditModal({ sensor, onSave, onClose, theme }) {
-  const [value, setValue] = useState(sensor.value);
-
-  return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-        <h3>Edit {sensor.name}</h3>
-        <div className="modal-body">
-          <label>Current Value: {value}{sensor.unit}</label>
-          <input
-            type="range"
-            min={sensor.min}
-            max={sensor.max}
-            step={sensor.step}
-            value={value}
-            onChange={(e) => setValue(parseFloat(e.target.value))}
-            className="range-input"
-          />
-          <div className="range-value">{value}{sensor.unit}</div>
-        </div>
-        <div className="modal-actions">
-          <button className="btn ghost" onClick={onClose}>Cancel</button>
-          <button className="btn primary" onClick={() => { onSave(value); onClose(); }}>Save</button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 // ── AFLC Decision Logic (uses Temp, Humidity, CO₂) ───────────────────────────
 function calculateAFLCDecision(nodeData) {
   const { temperature, humidity, co2 } = nodeData;
@@ -282,12 +75,12 @@ function calculateAFLCDecision(nodeData) {
 function WaterLevelAlert({ onDismiss }) {
   return (
     <div className="water-alert-banner" role="alert">
-      <div className="water-alert-icon">🚨</div>
+      <Icon name="alert" size={22} className="water-alert-icon" />
       <div className="water-alert-body">
-        <strong>RESERVOIR LOW WATER LEVEL DETECTED</strong>
-        <span>The water level sensor has been triggered. Please refill the reservoir immediately to prevent pump damage and nutrient disruption.</span>
+        <strong>Reservoir water level is low</strong>
+        <span>The water level sensor has been triggered. Refill the reservoir now to prevent pump damage and nutrient disruption.</span>
       </div>
-      <button className="water-alert-dismiss" onClick={onDismiss}>Acknowledge</button>
+      <button className="btn danger-outline" onClick={onDismiss}>Acknowledge</button>
     </div>
   );
 }
@@ -315,58 +108,54 @@ function LoginScreen({ onLogin, theme }) {
   };
 
   return (
-    <div className={`app theme-${theme}`} style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh" }}>
-      <LeafParticles count={14} theme={theme} />
+    <div className={`app app-centered theme-${theme}`}>
       <div className="login-card">
         <div className="login-logo-wrap">
-          <img src="/images.png" alt="FarmDash Logo" className="brand-logo login-logo" />
+          <img src="/images.png" alt="VertiFarmVision logo" className="brand-logo login-logo" />
         </div>
         <h2 className="login-title">VertiFarmVision</h2>
         <p className="login-sub muted">Vertical Farm Monitor — Sign in</p>
 
-        {error && <div className="login-error">{error}</div>}
+        {error && <div className="login-error" role="alert">{error}</div>}
 
         <form onSubmit={handleSubmit} className="login-form">
           <div className="login-field">
-            <label className="login-label muted">Email</label>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="admin@farmdash.com"
-              required
-              className="login-input"
-            />
+            <label className="login-label" htmlFor="login-email">Email</label>
+            <input id="login-email" type="email" autoComplete="username" value={email}
+              onChange={(e) => setEmail(e.target.value)} placeholder="admin@farmdash.com" required className="login-input" />
           </div>
           <div className="login-field">
-            <label className="login-label muted">Password</label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••"
-              required
-              className="login-input"
-            />
+            <label className="login-label" htmlFor="login-password">Password</label>
+            <input id="login-password" type="password" autoComplete="current-password" value={password}
+              onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" required className="login-input" />
           </div>
-          <button type="submit" disabled={loading} className="btn primary login-btn" style={{ opacity: loading ? 0.7 : 1 }}>
-            {loading ? "Signing in…" : "Sign In"}
+          <button type="submit" disabled={loading} className="btn primary login-btn">
+            {loading ? "Signing in…" : "Sign in"}
           </button>
         </form>
 
-        <p className="muted tiny" style={{ textAlign: "center", marginTop: 20 }}>Colegio de Muntinlupa — AFLC System</p>
+        <p className="muted tiny login-foot">Colegio de Muntinlupa — AFLC System</p>
       </div>
     </div>
   );
 }
 
+const NAV = [
+  { name: "Overview", icon: "dashboard", sub: "Real-time vertical farm monitoring with AFLC" },
+  { name: "Sensors",  icon: "gauge",     sub: "Live readings for every sensor, with manual overrides" },
+  { name: "Nodes",    icon: "radio",     sub: "Node status and irrigation control" },
+  { name: "Settings", icon: "settings",  sub: "Appearance, alerts and account" },
+];
+
+const CONNECTION_LABEL = { connected: "Live", connecting: "Connecting", offline: "Offline" };
+
 // ── Main App ──────────────────────────────────────────────────────────────────
 function AppInner() {
   const [theme, setTheme] = useState(() => localStorage.getItem("farmDash-theme") || "light");
+  const [textSize, setTextSize] = useState(() => localStorage.getItem("farmDash-textsize") || "normal");
   const [activePage, setActivePage] = useState("Overview");
   const [toasts, setToasts] = useState([]);
   const [notificationLog, setNotificationLog] = useState([]);
-  const [showNotifPanel, setShowNotifPanel] = useState(false);
   const [editingSensor, setEditingSensor] = useState(null);
   const [waterAlertDismissed, setWaterAlertDismissed] = useState(false);
   const prevWaterLevel = useRef(false);
@@ -382,6 +171,8 @@ function AppInner() {
   });
   const [nodeIds, setNodeIds] = useState({});
   const [dbStatus, setDbStatus] = useState("connecting");
+  const [lastUpdated, setLastUpdated] = useState(null);
+  const now = useNow(1000);
 
   // ── Reservoir sensor data (universal — not node-based) ────────────────────
   const [reservoirData, setReservoirData] = useState({
@@ -392,9 +183,16 @@ function AppInner() {
     motorRunning: false,
     motorState: 'STOPPED',
   });
+  const [reservoirLoaded, setReservoirLoaded] = useState(false);
   const [motorTriggering, setMotorTriggering] = useState(false);
-  const [cameraCapturing, setCameraCapturing] = useState(false);
+  const [cameraCapturing,  setCameraCapturing]  = useState(false);
+  const [latestMLResult,   setLatestMLResult]   = useState(null);
+  // latestMLResult shape: { label, confidence, probabilities, timestamp, imageData }
   const [irrigateAllStatus, setIrrigateAllStatus] = useState("idle"); // "idle" | "active"
+
+  // ── Rolling history for the trend charts (client-side, see useHistory) ────
+  const [nodeHistory, pushNodeHistory] = useHistory("farmDash-history-nodes");
+  const [reservoirHistory, pushReservoirHistory] = useHistory("farmDash-history-reservoir");
 
   // ── Check for existing session on load ────────────────────────────────────
   useEffect(() => {
@@ -414,6 +212,11 @@ function AppInner() {
     // Apply class to <html> so CSS vars cascade to html/body/#root backgrounds
     document.documentElement.classList.toggle("theme-dark", theme === "dark");
   }, [theme]);
+
+  useEffect(() => {
+    localStorage.setItem("farmDash-textsize", textSize);
+    document.documentElement.classList.toggle("text-large", textSize === "large");
+  }, [textSize]);
 
   // ── Load nodes from PostgreSQL ─────────────────────────────────────────────
   const loadNodes = useCallback(async () => {
@@ -440,6 +243,7 @@ function AppInner() {
       setNodeData(prev => ({ ...prev, ...mapped }));
       setNodeIds(ids);
       setDbStatus("connected");
+      setLastUpdated(Date.now());
     } catch {
       setDbStatus("offline");
     }
@@ -457,6 +261,8 @@ function AppInner() {
         motorRunning:        Boolean(data.motor_running),
         motorState:          data.motor_state ?? 'STOPPED',
       });
+      setReservoirLoaded(true);
+      setLastUpdated(Date.now());
     } catch {
       // Falls back to defaults silently
     }
@@ -464,7 +270,7 @@ function AppInner() {
 
   // ── Toasts ─────────────────────────────────────────────────────────────────
   const showToast = useCallback((message, type = "success") => {
-    const id = Date.now();
+    const id = Date.now() + Math.random();
     setToasts(prev => [...prev, { id, message, type }]);
     setNotificationLog(prev => [
       { id, message, type, time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }) },
@@ -478,9 +284,9 @@ function AppInner() {
     setMotorTriggering(true);
     try {
       await api.post('/reservoir/motor/run');
-      showToast('⚙️ Motor command sent — ESP32 will run for 15 seconds.', 'success');
+      showToast('Motor command sent — ESP32 will run for 15 seconds.', 'success');
     } catch {
-      showToast('❌ Failed to send motor command.', 'error');
+      showToast('Failed to send motor command.', 'error');
     } finally {
       // Keep button disabled for 16s (15s run + 1s buffer) so user can't spam
       setTimeout(() => setMotorTriggering(false), 16000);
@@ -488,17 +294,29 @@ function AppInner() {
   }, [showToast]);
 
   // ── Add an image notification directly to the log (no toast popup) ─────────
-  const showImageNotification = useCallback((message, imageData, capturedAt) => {
-    const id = Date.now();
+  const showImageNotification = useCallback((message, imageData, capturedAt, mlResult = null) => {
+    const id   = Date.now();
     const time = capturedAt
       ? new Date(capturedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
       : new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
     setNotificationLog(prev => [
-      { id, message, type: 'image', time, imageData },
+      { id, message, type: 'image', time, imageData, mlResult },
       ...prev.slice(0, 49),
     ]);
-    // Also fire a short toast so user knows it arrived
-    showToast('📷 Camera image captured!', 'success');
+
+    if (mlResult) {
+      setLatestMLResult({ ...mlResult, imageData, capturedAt });
+    }
+
+    const toastText = mlResult
+      ? mlResult.label === 'healthy'
+        ? `Healthy plant detected (${mlResult.confidence}% confidence)`
+        : `Disease detected (${mlResult.confidence}% confidence)`
+      : 'Camera image captured';
+
+    const toastType = mlResult?.label === 'diseased' ? 'warning' : 'success';
+    showToast(toastText, toastType);
   }, [showToast]);
 
   // ── Queue a camera capture command — ESP32 picks it up on its next POST ─────
@@ -506,9 +324,9 @@ function AppInner() {
     setCameraCapturing(true);
     try {
       await api.post('/camera/capture');
-      showToast('📷 Camera command sent — waiting for ESP32...', 'success');
+      showToast('Camera command sent — waiting for ESP32…', 'success');
     } catch {
-      showToast('❌ Failed to send camera command.', 'error');
+      showToast('Failed to send camera command.', 'error');
       setCameraCapturing(false);
     }
     // Button stays disabled until the WS camera_image event clears it (or 30s timeout)
@@ -528,7 +346,7 @@ function AppInner() {
   useEffect(() => {
     if (reservoirData.waterLevelTriggered && !prevWaterLevel.current) {
       setWaterAlertDismissed(false);
-      showToast("🚨 RESERVOIR LOW — Water level sensor triggered! Check reservoir immediately.", "warning");
+      showToast("Reservoir low — water level sensor triggered. Check the reservoir immediately.", "warning");
     }
     prevWaterLevel.current = reservoirData.waterLevelTriggered;
   }, [reservoirData.waterLevelTriggered]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -553,9 +371,10 @@ function AppInner() {
         if (msg.type === "camera_image") {
           setCameraCapturing(false);
           showImageNotification(
-            `📷 Reservoir snapshot — ${msg.width}×${msg.height}px`,
+            `Snapshot — ${msg.width}×${msg.height}px`,
             msg.imageData,
-            msg.capturedAt
+            msg.capturedAt,
+            msg.mlResult ?? null,
           );
         }
       } catch {}
@@ -594,7 +413,7 @@ function AppInner() {
     setIrrigateAllStatus("active");
     try {
       await api.post("/irrigate-all", { triggeredBy: "manual" });
-      showToast("💧 Irrigation command sent to all nodes & ESP32!", "success");
+      showToast("Irrigation command sent to all nodes and the ESP32.", "success");
     } catch (err) {
       showToast(`Irrigation failed: ${err.response?.data?.message || err.message}`, "error");
       setIrrigateAllStatus("idle");
@@ -604,7 +423,7 @@ function AppInner() {
     setTimeout(() => {
       setIrrigateAllStatus("idle");
       loadNodes();
-      showToast("✅ Irrigation cycle complete.", "success");
+      showToast("Irrigation cycle complete.", "success");
     }, 10000);
   }, [showToast, loadNodes]);
 
@@ -615,45 +434,37 @@ function AppInner() {
     setUser(null);
   }, []);
 
-
-
   // ── Safe node accessors — guards against loadNodes returning {} ───────────
   const n1 = nodeData.node1 ?? { temperature: 24.5, humidity: 65, co2: 800, lux: 0, lastIrrigation: "Never", irrigationStatus: "idle" };
   const n2 = nodeData.node2 ?? { temperature: 23.8, humidity: 68, co2: 820, lux: 0, lastIrrigation: "Never", irrigationStatus: "idle" };
+  const nodes = useMemo(() => ({ node1: n1, node2: n2 }), [n1, n2]);
 
   // ── Computed averages (node-based) ─────────────────────────────────────────
-  const avgTemp     = useMemo(() => (((n1.temperature ?? 24.5) + (n2.temperature ?? 23.8)) / 2).toFixed(1), [n1, n2]);
-  const avgHumidity = useMemo(() => Math.round(((n1.humidity ?? 65) + (n2.humidity ?? 68)) / 2), [n1, n2]);
-  const avgCO2      = useMemo(() => Math.round(((n1.co2 ?? 800) + (n2.co2 ?? 820)) / 2), [n1, n2]);
-  const avgLux      = useMemo(() => Math.round(((n1.lux ?? 0) + (n2.lux ?? 0)) / 2), [n1, n2]);
+  const averages = useMemo(() => {
+    const out = {};
+    ENV_METRICS.forEach((m) => { out[m] = ((n1[m] ?? 0) + (n2[m] ?? 0)) / 2; });
+    return out;
+  }, [n1, n2]);
 
-  const temperatureChart = useMemo(() => [
-    { label: "Node 1", value: n1.temperature ?? 24.5, unit: "°C" },
-    { label: "Node 2", value: n2.temperature ?? 23.8, unit: "°C" },
-  ], [n1, n2]);
+  const aflc = useMemo(() => ({ node1: calculateAFLCDecision(n1), node2: calculateAFLCDecision(n2) }), [n1, n2]);
+  const issues = useMemo(() => computeIssues(nodes, reservoirData), [nodes, reservoirData]);
 
-  const humidityChart = useMemo(() => [
-    { label: "Node 1", value: n1.humidity ?? 65, unit: "%" },
-    { label: "Node 2", value: n2.humidity ?? 68, unit: "%" },
-  ], [n1, n2]);
+  // ── Record history only from real server data (never the placeholder defaults) ──
+  useEffect(() => {
+    if (dbStatus !== "connected") return;
+    const pick = (d) => ({ temperature: d.temperature, humidity: d.humidity, co2: d.co2, lux: d.lux });
+    pushNodeHistory({ node1: pick(n1), node2: pick(n2) });
+  }, [nodeData, dbStatus]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const co2Chart = useMemo(() => [
-    { label: "Node 1", value: n1.co2 ?? 800, unit: " ppm" },
-    { label: "Node 2", value: n2.co2 ?? 820, unit: " ppm" },
-  ], [n1, n2]);
-
-  const luxChart = useMemo(() => [
-    { label: "Node 1", value: Math.round(n1.lux ?? 0), unit: " lx" },
-    { label: "Node 2", value: Math.round(n2.lux ?? 0), unit: " lx" },
-  ], [n1, n2]);
-
-  const aflcNode1 = useMemo(() => calculateAFLCDecision(n1), [n1]);
-  const aflcNode2 = useMemo(() => calculateAFLCDecision(n2), [n2]);
+  useEffect(() => {
+    if (!reservoirLoaded) return;
+    pushReservoirHistory({ ph: reservoirData.waterPH, tds: reservoirData.tds, turbidity: reservoirData.turbidity });
+  }, [reservoirData, reservoirLoaded]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Auth gates ─────────────────────────────────────────────────────────────
   if (!authChecked) {
     return (
-      <div className={`app theme-${theme}`} style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh" }}>
+      <div className={`app app-centered theme-${theme}`}>
         <div className="muted">Loading…</div>
       </div>
     );
@@ -661,68 +472,64 @@ function AppInner() {
 
   if (!user) return <LoginScreen onLogin={setUser} theme={theme} />;
 
+  const page = NAV.find((p) => p.name === activePage);
+  const nodeCount = Object.keys(nodeIds).length;
+
   // ── Dashboard ──────────────────────────────────────────────────────────────
   return (
     <div className={`app theme-${theme}`}>
-      <LeafParticles count={18} theme={theme} />
+      <a className="skip-link" href="#main">Skip to content</a>
 
-      <div className="toast-container">
-        {toasts.map(toast => (
-          <Toast key={toast.id} message={toast.message} type={toast.type} onClose={() => removeToast(toast.id)} />
-        ))}
-      </div>
+      <ToastStack toasts={toasts} onRemove={removeToast} />
 
       {editingSensor && (
         <SensorEditModal
           sensor={editingSensor}
           onSave={(value) => updateSensor(editingSensor.node, editingSensor.key, value)}
           onClose={() => setEditingSensor(null)}
-          theme={theme}
         />
       )}
 
       {/* ── Sidebar ── */}
-      <aside className="sidebar glass">
+      <aside className="sidebar">
         <div className="brand">
-          <img src="/images.png" alt="Logo" className="brand-logo" />
+          <img src="/images.png" alt="" className="brand-logo" />
           <div>
             <h1>VertiFarmVision</h1>
-            <div className="muted tiny">Vertical Farm Monitor</div>
+            <div className="tiny">Vertical Farm Monitor</div>
           </div>
         </div>
 
-        <nav className="nav">
-          {[
-            { name: "Overview", icon: "📊" },
-            { name: "Sensors",  icon: "🌡️" },
-            { name: "Nodes",    icon: "📡" },
-            { name: "Settings", icon: "⚙️" },
-          ].map((p) => (
+        <nav className="nav" aria-label="Main">
+          {NAV.map((p) => (
             <button
               key={p.name}
               className={`nav-btn ${activePage === p.name ? "active" : ""}`}
+              aria-current={activePage === p.name ? "page" : undefined}
               onClick={() => setActivePage(p.name)}
             >
-              <span className="nav-icon">{p.icon}</span>{p.name}
+              <Icon name={p.icon} size={18} />
+              {p.name}
               {p.name === "Sensors" && reservoirData.waterLevelTriggered && (
-                <span className="nav-alert-dot" title="Water level alert">●</span>
+                <span className="nav-alert-dot" title="Water level alert" aria-label="Water level alert" />
               )}
             </button>
           ))}
         </nav>
 
         <div className="sidebar-foot">
-          <div className="muted tiny">2 nodes active</div>
-          <div className="status-badge">
-            <span className="status-dot"></span>System Active
+          <div className={`sidebar-status conn-${dbStatus}`}>
+            <span className="dot" />
+            <div>
+              <strong>{dbStatus === "connected" ? "System active" : dbStatus === "offline" ? "Server offline" : "Connecting…"}</strong>
+              <span className="tiny">{dbStatus === "connected" ? `${nodeCount || 2} nodes reporting` : "Waiting for data"}</span>
+            </div>
           </div>
           {reservoirData.waterLevelTriggered && (
-            <div className="status-badge" style={{ background: "rgba(255,80,80,0.15)", color: "#ff5050", marginTop: 6 }}>
-              <span className="status-dot" style={{ background: "#ff5050" }}></span>Reservoir Low
-            </div>
+            <div className="sidebar-status conn-offline"><span className="dot" /><strong>Reservoir low</strong></div>
           )}
           <div className="authors">
-            <div className="author-title">Developed by:</div>
+            <div className="author-title">Developed by</div>
             <div className="author-name">Chungwee, Frixjohn Q.</div>
             <div className="author-name">Yara, Marko Karlo A.</div>
             <div className="author-name">Martizano, Arabella Mae B.</div>
@@ -731,77 +538,32 @@ function AppInner() {
       </aside>
 
       {/* ── Main ── */}
-      <main className="main">
+      <main className="main" id="main" tabIndex={-1}>
         <header className="main-head">
           <div>
             <h2 className="page-title">{activePage}</h2>
-            <div className="muted">Real-time vertical farm monitoring with AFLC</div>
+            <p className="muted page-sub">{page.sub}</p>
           </div>
           <div className="actions">
+            <span className={`conn conn-${dbStatus}`} role="status">
+              <span className="dot" />
+              {CONNECTION_LABEL[dbStatus]}
+              {dbStatus === "connected" && lastUpdated && <span className="conn-time">· {timeAgo(lastUpdated, now)}</span>}
+            </span>
+            <button
+              className="icon-btn"
+              onClick={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}
+              aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} theme`}
+              title={`Switch to ${theme === "dark" ? "light" : "dark"} theme`}
+            >
+              <Icon name={theme === "dark" ? "sun" : "moon"} size={19} />
+            </button>
             <ExportButton
               nodeData={nodeData}
               reservoirData={reservoirData}
-              onExported={() => showToast("✅ Data exported successfully!", "success")}
+              onExported={() => showToast("Data exported successfully.", "success")}
             />
-            <div className="notif-wrapper">
-              <button
-                className={`btn ghost notif-btn ${showNotifPanel ? "active" : ""}`}
-                onClick={() => setShowNotifPanel(p => !p)}
-              >
-                <span className="btn-icon">🔔</span>
-                Notification Log
-                {notificationLog.length > 0 && (
-                  <span className="notif-count">{notificationLog.length}</span>
-                )}
-              </button>
-              {showNotifPanel && (
-                <div className="notif-panel">
-                  <div className="notif-panel-head">
-                    <strong>Notification Log</strong>
-                    <button
-                      className="notif-clear"
-                      onClick={() => { setNotificationLog([]); setShowNotifPanel(false); }}
-                    >
-                      Clear all
-                    </button>
-                  </div>
-                  <div className="notif-list">
-                    {notificationLog.length === 0 ? (
-                      <div className="notif-empty">No notifications yet</div>
-                    ) : (
-                      notificationLog.map(n => (
-                        <div key={n.id} className={`notif-item notif-item-${n.type === 'image' ? 'success' : n.type}`}>
-                          <span className="notif-icon">
-                            {n.type === "image" ? "📷" : n.type === "success" ? "✅" : n.type === "error" ? "❌" : n.type === "warning" ? "⚠️" : "ℹ️"}
-                          </span>
-                          <div className="notif-body">
-                            <div className="notif-msg">{n.message}</div>
-                            {n.imageData && (
-                              <img
-                                src={n.imageData}
-                                alt="Reservoir snapshot"
-                                style={{
-                                  marginTop: '6px',
-                                  width: '100%',
-                                  maxWidth: '260px',
-                                  borderRadius: '6px',
-                                  border: '1px solid rgba(255,255,255,0.15)',
-                                  display: 'block',
-                                  cursor: 'pointer',
-                                }}
-                                onClick={() => window.open(n.imageData, '_blank')}
-                                title="Click to open full size"
-                              />
-                            )}
-                            <div className="notif-time">{n.time}</div>
-                          </div>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
+            <NotificationBell log={notificationLog} onClear={() => setNotificationLog([])} />
           </div>
         </header>
 
@@ -810,552 +572,55 @@ function AppInner() {
           <WaterLevelAlert onDismiss={() => setWaterAlertDismissed(true)} />
         )}
 
-        {/* ── OVERVIEW ── */}
         {activePage === "Overview" && (
-          <>
-            {/* Node averages */}
-            <section className="stats-row">
-              <StatCard label="Avg Temp"     value={parseFloat(avgTemp)}  accent="teal"   theme={theme} icon="🌡️" unit="°C" />
-              <StatCard label="Avg Humidity" value={avgHumidity}           accent="blue"   theme={theme} icon="💧" unit="%" />
-              <StatCard label="Avg CO₂"      value={avgCO2}               accent="purple" theme={theme} icon="🫧" unit=" ppm" />
-              <StatCard label="Avg Light"    value={avgLux}               accent="teal"   theme={theme} icon="☀️" unit=" lx" />
-            </section>
-
-            {/* Reservoir quick-status strip */}
-            <section className="reservoir-strip">
-              <div className="reservoir-strip-title">
-                <span>🧪</span>
-                <h3>Reservoir Status</h3>
-                <span className={`badge ${reservoirData.waterLevelTriggered ? "badge-danger" : ""}`}>
-                  {reservoirData.waterLevelTriggered ? "⚠ Low Water" : "Universal Sensor"}
-                </span>
-              </div>
-              <div className="reservoir-strip-grid">
-                <div className="res-strip-item">
-                  <span className="res-strip-icon">🧪</span>
-                  <div>
-                    <div className="res-strip-label">Water pH</div>
-                    <div className="res-strip-value">{reservoirData.waterPH}</div>
-                  </div>
-                  <span className="sensor-status" style={{ color: reservoirData.waterPH >= 5.5 && reservoirData.waterPH <= 7.0 ? "#4caf50" : "#ff9800" }}>
-                    {reservoirData.waterPH >= 5.5 && reservoirData.waterPH <= 7.0 ? "✓" : "⚠"}
-                  </span>
-                </div>
-                <div className="res-strip-item">
-                  <span className="res-strip-icon">⚡</span>
-                  <div>
-                    <div className="res-strip-label">TDS</div>
-                    <div className="res-strip-value">{reservoirData.tds} ppm</div>
-                  </div>
-                  <span className="sensor-status" style={{ color: reservoirData.tds >= 500 && reservoirData.tds <= 1500 ? "#4caf50" : "#ff9800" }}>
-                    {reservoirData.tds >= 500 && reservoirData.tds <= 1500 ? "✓" : "⚠"}
-                  </span>
-                </div>
-                <div className="res-strip-item">
-                  <span className="res-strip-icon">🌊</span>
-                  <div>
-                    <div className="res-strip-label">Turbidity</div>
-                    <div className="res-strip-value">{reservoirData.turbidity} NTU</div>
-                  </div>
-                  <span className="sensor-status" style={{ color: reservoirData.turbidity < 50 ? "#4caf50" : "#ff9800" }}>
-                    {reservoirData.turbidity < 50 ? "✓" : "⚠"}
-                  </span>
-                </div>
-                <div className={`res-strip-item water-level-item ${reservoirData.waterLevelTriggered ? "water-level-danger" : "water-level-ok"}`}>
-                  <span className="res-strip-icon">{reservoirData.waterLevelTriggered ? "🚨" : "💧"}</span>
-                  <div>
-                    <div className="res-strip-label">Water Level</div>
-                    <div className="res-strip-value">{reservoirData.waterLevelTriggered ? "LOW — REFILL NOW" : "Optimal"}</div>
-                  </div>
-                  <span className="sensor-status" style={{ color: reservoirData.waterLevelTriggered ? "#f44336" : "#4caf50" }}>
-                    {reservoirData.waterLevelTriggered ? "🚨" : "✓"}
-                  </span>
-                </div>
-                <div className="res-strip-item">
-                  <span className="res-strip-icon">{reservoirData.motorRunning ? "⚙️" : "⏸"}</span>
-                  <div>
-                    <div className="res-strip-label">stepper Motor</div>
-                    <div className="res-strip-value">{reservoirData.motorState}</div>
-                  </div>
-                  <span className="sensor-status" style={{ color: reservoirData.motorRunning ? "#4caf50" : "#888" }}>
-                    {reservoirData.motorRunning ? "✓" : "–"}
-                  </span>
-                </div>
-                <div className="res-strip-item" style={{ gridColumn: '1 / -1', justifyContent: 'center', paddingTop: '4px', gap: '10px' }}>
-                  <button
-                    onClick={triggerMotor}
-                    disabled={motorTriggering || reservoirData.motorRunning}
-                    style={{
-                      padding: '8px 20px',
-                      background: motorTriggering || reservoirData.motorRunning ? '#555' : '#1976d2',
-                      color: '#fff',
-                      border: 'none',
-                      borderRadius: '8px',
-                      fontWeight: 'bold',
-                      cursor: motorTriggering || reservoirData.motorRunning ? 'not-allowed' : 'pointer',
-                      opacity: motorTriggering || reservoirData.motorRunning ? 0.6 : 1,
-                      transition: 'background 0.2s',
-                    }}
-                  >
-                    {motorTriggering ? '⏳ Command sent…' : reservoirData.motorRunning ? '⚙️ Motor Running…' : '▶ Run Motor (15s)'}
-                  </button>
-                  <button
-                    onClick={captureCamera}
-                    disabled={cameraCapturing}
-                    style={{
-                      padding: '8px 20px',
-                      background: cameraCapturing ? '#555' : '#2e7d32',
-                      color: '#fff',
-                      border: 'none',
-                      borderRadius: '8px',
-                      fontWeight: 'bold',
-                      cursor: cameraCapturing ? 'not-allowed' : 'pointer',
-                      opacity: cameraCapturing ? 0.6 : 1,
-                      transition: 'background 0.2s',
-                    }}
-                  >
-                    {cameraCapturing ? '⏳ Capturing…' : '📷 Capture Image'}
-                  </button>
-                </div>
-              </div>
-            </section>
-
-            <section className="aflc-section">
-              <div className="section-header"><h3>AFLC Status</h3><span className="badge">Adaptive Fuzzy Logic</span></div>
-              <div className="aflc-grid">
-                <div className="aflc-card">
-                  <div className="aflc-header">
-                    <h4>Node 1 - AFLC Decision</h4>
-                    <span className={`aflc-badge ${aflcNode1.decision.toLowerCase()}`}>{aflcNode1.decision}</span>
-                  </div>
-                  <div className="aflc-body">
-                    <div className="aflc-confidence">
-                      <span className="confidence-label">Confidence:</span>
-                      <span className="confidence-value">{aflcNode1.confidence}%</span>
-                    </div>
-                    <div className="aflc-reason"><span className="reason-icon">💡</span><span>{aflcNode1.reason}</span></div>
-                    <div className="aflc-metrics">
-                      <div className="metric-item">
-                        <span>CO₂: {n1.co2} ppm</span>
-                        <span className={n1.co2 >= 400 && n1.co2 <= 1200 ? "status-ok" : "status-warn"}>
-                          {n1.co2 >= 400 && n1.co2 <= 1200 ? "✓" : "⚠"}
-                        </span>
-                      </div>
-                      <div className="metric-item">
-                        <span>Temp: {n1.temperature}°C</span>
-                        <span className={n1.temperature >= 22 && n1.temperature <= 26 ? "status-ok" : "status-warn"}>
-                          {n1.temperature >= 22 && n1.temperature <= 26 ? "✓" : "⚠"}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="aflc-card">
-                  <div className="aflc-header">
-                    <h4>Node 2 - AFLC Decision</h4>
-                    <span className={`aflc-badge ${aflcNode2.decision.toLowerCase()}`}>{aflcNode2.decision}</span>
-                  </div>
-                  <div className="aflc-body">
-                    <div className="aflc-confidence">
-                      <span className="confidence-label">Confidence:</span>
-                      <span className="confidence-value">{aflcNode2.confidence}%</span>
-                    </div>
-                    <div className="aflc-reason"><span className="reason-icon">💡</span><span>{aflcNode2.reason}</span></div>
-                    <div className="aflc-metrics">
-                      <div className="metric-item">
-                        <span>CO₂: {n2.co2} ppm</span>
-                        <span className={n2.co2 >= 400 && n2.co2 <= 1200 ? "status-ok" : "status-warn"}>
-                          {n2.co2 >= 400 && n2.co2 <= 1200 ? "✓" : "⚠"}
-                        </span>
-                      </div>
-                      <div className="metric-item">
-                        <span>Temp: {n2.temperature}°C</span>
-                        <span className={n2.temperature >= 22 && n2.temperature <= 26 ? "status-ok" : "status-warn"}>
-                          {n2.temperature >= 22 && n2.temperature <= 26 ? "✓" : "⚠"}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </section>
-
-            <section className="charts-grid">
-              <div className="card big-card">
-                <div className="card-top">
-                  <div><h3>Temperature by Node</h3><div className="muted tiny">Current readings</div></div>
-                </div>
-                <AnimatedBarChart data={temperatureChart} theme={theme} />
-              </div>
-              <div className="card big-card">
-                <div className="card-top">
-                  <div><h3>Humidity by Node</h3><div className="muted tiny">Current readings</div></div>
-                </div>
-                <AnimatedBarChart data={humidityChart} theme={theme} />
-              </div>
-              <div className="card big-card">
-                <div className="card-top">
-                  <div><h3>CO₂ by Node</h3><div className="muted tiny">Sensirion readings (ppm)</div></div>
-                </div>
-                <AnimatedBarChart data={co2Chart} theme={theme} />
-              </div>
-              <div className="card big-card">
-                <div className="card-top">
-                  <div><h3>Light (Lux) by Node</h3><div className="muted tiny">BH1750 readings</div></div>
-                </div>
-                <AnimatedBarChart data={luxChart} theme={theme} />
-              </div>
-            </section>
-
-            <section className="charts-grid">
-              <div className="card big-card">
-                <div className="card-top">
-                  <div><h3>Node 1 Status</h3><div className="muted tiny">All sensors</div></div>
-                </div>
-                <div className="node-summary">
-                  <div className="summary-item"><span>🌡️ Temperature:</span><strong>{n1.temperature}°C</strong></div>
-                  <div className="summary-item"><span>💧 Humidity:</span><strong>{n1.humidity}%</strong></div>
-                  <div className="summary-item"><span>🫧 CO₂:</span><strong>{n1.co2} ppm</strong></div>
-                  <div className="summary-item"><span>☀️ Light:</span><strong>{Math.round(n1.lux)} lx</strong></div>
-                </div>
-              </div>
-              <div className="card big-card">
-                <div className="card-top">
-                  <div><h3>Node 2 Status</h3><div className="muted tiny">All sensors</div></div>
-                </div>
-                <div className="node-summary">
-                  <div className="summary-item"><span>🌡️ Temperature:</span><strong>{n2.temperature}°C</strong></div>
-                  <div className="summary-item"><span>💧 Humidity:</span><strong>{n2.humidity}%</strong></div>
-                  <div className="summary-item"><span>🫧 CO₂:</span><strong>{n2.co2} ppm</strong></div>
-                  <div className="summary-item"><span>☀️ Light:</span><strong>{Math.round(n2.lux)} lx</strong></div>
-                </div>
-              </div>
-            </section>
-          </>
+          <OverviewView
+            nodes={nodes}
+            averages={averages}
+            nodeHistory={nodeHistory}
+            reservoirHistory={reservoirHistory}
+            aflc={aflc}
+            reservoir={reservoirData}
+            issues={issues}
+            connection={dbStatus}
+            lastUpdated={lastUpdated}
+            now={now}
+            latestMLResult={latestMLResult}
+            onRunMotor={triggerMotor}
+            motorBusy={motorTriggering}
+            onCapture={captureCamera}
+            cameraBusy={cameraCapturing}
+          />
         )}
 
-        {/* ── SENSORS ── */}
         {activePage === "Sensors" && (
-          <section className="sensors">
-            <div className="section-header"><h3>Sensor Readings</h3><span className="badge">Live Data</span></div>
-
-            {/* ── Node 1 sensors ── */}
-            <div className="sensor-group-label">📡 Node 1 — Layer 1</div>
-            <div className="sensor-grid">
-              <div className="sensor-card">
-                <div className="sensor-header">
-                  <h4>Node 1 - Temperature</h4>
-                  <button className="btn-edit" onClick={() => setEditingSensor({ node: "node1", key: "temperature", name: "Temperature (Node 1)", value: n1.temperature, unit: "°C", min: 15, max: 35, step: 0.1 })}>✏️</button>
-                </div>
-                <div className="sensor-value">{n1.temperature}°C</div>
-                <div className="sensor-status" style={{ color: n1.temperature >= 22 && n1.temperature <= 26 ? "#4caf50" : "#ff9800" }}>
-                  {n1.temperature >= 22 && n1.temperature <= 26 ? "✓ Optimal" : "⚠ Check Range"}
-                </div>
-              </div>
-              <div className="sensor-card">
-                <div className="sensor-header">
-                  <h4>Node 1 - Humidity</h4>
-                  <button className="btn-edit" onClick={() => setEditingSensor({ node: "node1", key: "humidity", name: "Humidity (Node 1)", value: n1.humidity, unit: "%", min: 40, max: 90, step: 1 })}>✏️</button>
-                </div>
-                <div className="sensor-value">{n1.humidity}%</div>
-                <div className="sensor-status" style={{ color: n1.humidity >= 60 && n1.humidity <= 75 ? "#4caf50" : "#ff9800" }}>
-                  {n1.humidity >= 60 && n1.humidity <= 75 ? "✓ Optimal" : "⚠ Check Range"}
-                </div>
-              </div>
-              <div className="sensor-card">
-                <div className="sensor-header">
-                  <h4>Node 1 - CO₂</h4>
-                  <button className="btn-edit" onClick={() => setEditingSensor({ node: "node1", key: "co2", name: "CO₂ (Node 1)", value: n1.co2, unit: " ppm", min: 300, max: 3000, step: 10 })}>✏️</button>
-                </div>
-                <div className="sensor-value">{n1.co2} ppm</div>
-                <div className="sensor-meta muted tiny">Sensirion SCD4x</div>
-                <div className="sensor-status" style={{ color: n1.co2 >= 400 && n1.co2 <= 1200 ? "#4caf50" : "#ff9800" }}>
-                  {n1.co2 >= 400 && n1.co2 <= 1200 ? "✓ Optimal" : "⚠ Check Range"}
-                </div>
-              </div>
-              <div className="sensor-card">
-                <div className="sensor-header">
-                  <h4>Node 1 - Light</h4>
-                </div>
-                <div className="sensor-value">{Math.round(n1.lux)} lx</div>
-                <div className="sensor-status" style={{ color: n1.lux >= 5000 && n1.lux <= 80000 ? "#4caf50" : "#ff9800" }}>
-                  {n1.lux >= 5000 && n1.lux <= 80000 ? "✓ Optimal" : "⚠ Check Range"}
-                </div>
-              </div>
-            </div>
-
-            {/* ── Node 2 sensors ── */}
-            <div className="sensor-group-label" style={{ marginTop: 24 }}>📡 Node 2 — Layer 2</div>
-            <div className="sensor-grid">
-              <div className="sensor-card">
-                <div className="sensor-header">
-                  <h4>Node 2 - Temperature</h4>
-                  <button className="btn-edit" onClick={() => setEditingSensor({ node: "node2", key: "temperature", name: "Temperature (Node 2)", value: n2.temperature, unit: "°C", min: 15, max: 35, step: 0.1 })}>✏️</button>
-                </div>
-                <div className="sensor-value">{n2.temperature}°C</div>
-                <div className="sensor-status" style={{ color: n2.temperature >= 22 && n2.temperature <= 26 ? "#4caf50" : "#ff9800" }}>
-                  {n2.temperature >= 22 && n2.temperature <= 26 ? "✓ Optimal" : "⚠ Check Range"}
-                </div>
-              </div>
-              <div className="sensor-card">
-                <div className="sensor-header">
-                  <h4>Node 2 - Humidity</h4>
-                  <button className="btn-edit" onClick={() => setEditingSensor({ node: "node2", key: "humidity", name: "Humidity (Node 2)", value: n2.humidity, unit: "%", min: 40, max: 90, step: 1 })}>✏️</button>
-                </div>
-                <div className="sensor-value">{n2.humidity}%</div>
-                <div className="sensor-status" style={{ color: n2.humidity >= 60 && n2.humidity <= 75 ? "#4caf50" : "#ff9800" }}>
-                  {n2.humidity >= 60 && n2.humidity <= 75 ? "✓ Optimal" : "⚠ Check Range"}
-                </div>
-              </div>
-              <div className="sensor-card">
-                <div className="sensor-header">
-                  <h4>Node 2 - CO₂</h4>
-                  <button className="btn-edit" onClick={() => setEditingSensor({ node: "node2", key: "co2", name: "CO₂ (Node 2)", value: n2.co2, unit: " ppm", min: 300, max: 3000, step: 10 })}>✏️</button>
-                </div>
-                <div className="sensor-value">{n2.co2} ppm</div>
-                <div className="sensor-meta muted tiny">Sensirion SCD4x</div>
-                <div className="sensor-status" style={{ color: n2.co2 >= 400 && n2.co2 <= 1200 ? "#4caf50" : "#ff9800" }}>
-                  {n2.co2 >= 400 && n2.co2 <= 1200 ? "✓ Optimal" : "⚠ Check Range"}
-                </div>
-              </div>
-              <div className="sensor-card">
-                <div className="sensor-header">
-                  <h4>Node 2 - Light</h4>
-                </div>
-                <div className="sensor-value">{Math.round(n2.lux)} lx</div>
-                <div className="sensor-status" style={{ color: n2.lux >= 5000 && n2.lux <= 80000 ? "#4caf50" : "#ff9800" }}>
-                  {n2.lux >= 5000 && n2.lux <= 80000 ? "✓ Optimal" : "⚠ Check Range"}
-                </div>
-              </div>
-            </div>
-
-            {/* ── Reservoir sensors (universal) ── */}
-            <div className="sensor-group-label reservoir-group-label" style={{ marginTop: 28 }}>
-              🧪 Reservoir — Universal Sensor
-              {reservoirData.waterLevelTriggered && (
-                <span className="reservoir-alert-pill">🚨 WATER LEVEL LOW</span>
-              )}
-            </div>
-            <div className="sensor-grid">
-              {/* Water pH */}
-              <div className="sensor-card">
-                <div className="sensor-header">
-                  <h4>Water pH</h4>
-                </div>
-                <div className="sensor-value">{reservoirData.waterPH}</div>
-                <div className="sensor-meta muted tiny">Atlas Scientific EZO-pH</div>
-                <div className="sensor-status" style={{ color: reservoirData.waterPH >= 5.5 && reservoirData.waterPH <= 7.0 ? "#4caf50" : "#ff9800" }}>
-                  {reservoirData.waterPH >= 5.5 && reservoirData.waterPH <= 7.0 ? "✓ Optimal (5.5–7.0)" : "⚠ Out of Range"}
-                </div>
-              </div>
-
-              {/* TDS */}
-              <div className="sensor-card">
-                <div className="sensor-header">
-                  <h4>TDS Sensor</h4>
-                </div>
-                <div className="sensor-value">{reservoirData.tds} ppm</div>
-                <div className="sensor-meta muted tiny">Total Dissolved Solids</div>
-                <div className="sensor-status" style={{ color: reservoirData.tds >= 500 && reservoirData.tds <= 1500 ? "#4caf50" : "#ff9800" }}>
-                  {reservoirData.tds >= 500 && reservoirData.tds <= 1500 ? "✓ Optimal (500–1500 ppm)" : "⚠ Out of Range"}
-                </div>
-              </div>
-
-              {/* Turbidity */}
-              <div className="sensor-card">
-                <div className="sensor-header">
-                  <h4>Turbidity Sensor</h4>
-                </div>
-                <div className="sensor-value">{reservoirData.turbidity} NTU</div>
-                <div className="sensor-meta muted tiny">Water clarity index</div>
-                <div className="sensor-status" style={{ color: reservoirData.turbidity < 50 ? "#4caf50" : "#ff9800" }}>
-                  {reservoirData.turbidity < 50 ? "✓ Clear (&lt;50 NTU)" : "⚠ Turbid — Check Water"}
-                </div>
-              </div>
-
-              {/* Water Level */}
-              <div className={`sensor-card ${reservoirData.waterLevelTriggered ? "sensor-card-danger" : ""}`}>
-                <div className="sensor-header">
-                  <h4>Water Level</h4>
-                </div>
-                <div className={`sensor-value ${reservoirData.waterLevelTriggered ? "sensor-value-danger" : ""}`}>
-                  {reservoirData.waterLevelTriggered ? "LOW ⚠" : "Optimal"}
-                </div>
-                <div className="sensor-meta muted tiny">Float switch sensor</div>
-                <div className="sensor-status" style={{ color: reservoirData.waterLevelTriggered ? "#f44336" : "#4caf50", fontWeight: reservoirData.waterLevelTriggered ? 700 : 400 }}>
-                  {reservoirData.waterLevelTriggered
-                    ? "🚨 TRIGGERED — Refill reservoir immediately!"
-                    : "✓ Water level is sufficient"}
-                </div>
-              </div>
-
-              {/* Stepper */}
-              <div className="sensor-card">
-                <div className="sensor-header">
-                  <h4>Stepper Motor</h4>
-                </div>
-                <div className="sensor-value" style={{ color: reservoirData.motorRunning ? "#4caf50" : "#888" }}>
-                  {reservoirData.motorState}
-                </div>
-                <div className="sensor-meta muted tiny">Stepper — 10s run / 30s stop cycle</div>
-                <div className="sensor-status" style={{ color: reservoirData.motorRunning ? "#4caf50" : "#888" }}>
-                  {reservoirData.motorRunning ? "⚙️ Motor is pumping" : "⏸ Motor idle"}
-                </div>
-              </div>
-            </div>
-          </section>
+          <SensorsView
+            nodes={nodes}
+            nodeHistory={nodeHistory}
+            reservoir={reservoirData}
+            reservoirHistory={reservoirHistory}
+            onEdit={setEditingSensor}
+          />
         )}
 
-        {/* ── NODES ── */}
         {activePage === "Nodes" && (
-          <section className="nodes">
-            <div className="section-header"><h3>Node Control & Irrigation</h3><span className="badge">2 Active</span></div>
-
-            {/* ── Single system-wide irrigation button ── */}
-            <div style={{
-              background: irrigateAllStatus === "active"
-                ? "linear-gradient(135deg, #1b5e20 0%, #2e7d32 100%)"
-                : "linear-gradient(135deg, #2e7d32 0%, #43a047 100%)",
-              borderRadius: 16,
-              padding: "28px 32px",
-              marginBottom: 24,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              gap: 24,
-              boxShadow: "0 4px 20px #0002",
-              flexWrap: "wrap",
-            }}>
-              <div>
-                <div style={{ fontSize: 22, fontWeight: 700, color: "#fff", marginBottom: 4 }}>
-                  💧 System Irrigation
-                </div>
-                <div style={{ fontSize: 13, color: "#c8e6c9" }}>
-                  {irrigateAllStatus === "active"
-                    ? "🌊 Irrigating all nodes… pump signal sent to ESP32"
-                    : "Triggers all active nodes + sends pump signal to ESP32 simultaneously"}
-                </div>
-              </div>
-              <button
-                className="btn-irrigate"
-                style={{
-                  fontSize: 16,
-                  padding: "14px 32px",
-                  background: irrigateAllStatus === "active" ? "#81c784" : "#fff",
-                  color: irrigateAllStatus === "active" ? "#1b5e20" : "#2e7d32",
-                  fontWeight: 700,
-                  minWidth: 200,
-                  opacity: irrigateAllStatus === "active" ? 0.85 : 1,
-                  cursor: irrigateAllStatus === "active" ? "not-allowed" : "pointer",
-                }}
-                onClick={irrigateAll}
-                disabled={irrigateAllStatus === "active"}
-              >
-                {irrigateAllStatus === "active" ? "⏳ Irrigating…" : "💧 Irrigate Entire System"}
-              </button>
-            </div>
-
-            <div className="node-cards">
-              <div className="node-detail-card">
-                <div className="node-detail-header">
-                  <h3>📡 Node 1 (Layer 1)</h3>
-                  <span className="node-status-badge active">Active</span>
-                </div>
-                <div className="node-detail-body">
-                  <div className="detail-row"><span className="detail-label">🌡️ Temperature:</span><span className="detail-value">{n1.temperature}°C</span></div>
-                  <div className="detail-row"><span className="detail-label">💧 Humidity:</span><span className="detail-value">{n1.humidity}%</span></div>
-                  <div className="detail-row"><span className="detail-label">🫧 CO₂:</span><span className="detail-value">{n1.co2} ppm</span></div>
-                  <div className="detail-row"><span className="detail-label">☀️ Light:</span><span className="detail-value">{Math.round(n1.lux)} lx</span></div>
-                  <div className="detail-row">
-                    <span className="detail-label">🕒 Last Irrigation:</span>
-                    <span className="detail-value">{n1.lastIrrigation}</span>
-                  </div>
-                  <div className="detail-row">
-                    <span className="detail-label">Status:</span>
-                    <span className={`irrigation-badge ${irrigateAllStatus === "active" ? "active" : n1.irrigationStatus}`}>
-                      {irrigateAllStatus === "active" || n1.irrigationStatus === "active" ? "💧 Irrigating..." : "✓ Idle"}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="node-detail-card">
-                <div className="node-detail-header">
-                  <h3>📡 Node 2 (Layer 2)</h3>
-                  <span className="node-status-badge active">Active</span>
-                </div>
-                <div className="node-detail-body">
-                  <div className="detail-row"><span className="detail-label">🌡️ Temperature:</span><span className="detail-value">{n2.temperature}°C</span></div>
-                  <div className="detail-row"><span className="detail-label">💧 Humidity:</span><span className="detail-value">{n2.humidity}%</span></div>
-                  <div className="detail-row"><span className="detail-label">🫧 CO₂:</span><span className="detail-value">{n2.co2} ppm</span></div>
-                  <div className="detail-row"><span className="detail-label">☀️ Light:</span><span className="detail-value">{Math.round(n2.lux)} lx</span></div>
-                  <div className="detail-row">
-                    <span className="detail-label">🕒 Last Irrigation:</span>
-                    <span className="detail-value">{n2.lastIrrigation}</span>
-                  </div>
-                  <div className="detail-row">
-                    <span className="detail-label">Status:</span>
-                    <span className={`irrigation-badge ${irrigateAllStatus === "active" ? "active" : n2.irrigationStatus}`}>
-                      {irrigateAllStatus === "active" || n2.irrigationStatus === "active" ? "💧 Irrigating..." : "✓ Idle"}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="node-detail-card waiting">
-                <div className="node-detail-header">
-                  <h3>📡 Node 3 (Layer 3)</h3>
-                  <span className="node-status-badge waiting">Waiting</span>
-                </div>
-                <div className="node-detail-body waiting-state">
-                  <div className="waiting-icon">⏳</div>
-                  <p>Waiting for hardware connection...</p>
-                  <p className="muted tiny">Node will appear automatically when connected</p>
-                </div>
-              </div>
-            </div>
-          </section>
+          <NodesView nodes={nodes} irrigateAllStatus={irrigateAllStatus} onIrrigateAll={irrigateAll} />
         )}
 
-        {/* ── SETTINGS ── */}
         {activePage === "Settings" && (
-          <section className="settings">
-            <h3>System Settings</h3>
-            <div className="settings-grid">
-              <div className="setting-card">
-                <div className="setting-header"><span className="setting-icon">🎨</span><h4>Appearance</h4></div>
-                <div className="setting-item">
-                  <label>Theme</label>
-                  <div className="toggle">
-                    <button className={`btn ${theme === "light" ? "active" : ""}`} onClick={() => setTheme("light")}>☀️ Light</button>
-                    <button className={`btn ${theme === "dark" ? "active" : ""}`} onClick={() => setTheme("dark")}>🌙 Dark</button>
-                  </div>
-                </div>
-              </div>
-
-              <div className="setting-card">
-                <div className="setting-header"><span className="setting-icon">🔔</span><h4>Alerts</h4></div>
-                <div className="setting-item"><label>Temperature alerts</label><input type="checkbox" defaultChecked className="toggle-switch" /></div>
-                <div className="setting-item"><label>CO₂ alerts</label><input type="checkbox" defaultChecked className="toggle-switch" /></div>
-                <div className="setting-item"><label>Water level alerts</label><input type="checkbox" defaultChecked className="toggle-switch" /></div>
-                <div className="setting-item"><label>AFLC notifications</label><input type="checkbox" defaultChecked className="toggle-switch" /></div>
-              </div>
-
-              <div className="setting-card">
-                <div className="setting-header"><span className="setting-icon">ℹ️</span><h4>About</h4></div>
-                <div className="about-content">
-                  <p><strong>VertiFarmVision v1.0</strong></p>
-                  <p className="muted tiny">Vertical Farm Monitoring System</p>
-                  <p className="muted tiny">with Adaptive Fuzzy Logic Controller</p>
-                  <p className="muted tiny">Colegio de Muntinlupa</p>
-                  <button className="btn ghost" style={{ marginTop: 14, width: "100%", fontSize: 13 }} onClick={logout}>🚪 Logout</button>
-                </div>
-              </div>
-            </div>
-          </section>
+          <SettingsView theme={theme} setTheme={setTheme} textSize={textSize} setTextSize={setTextSize} onLogout={logout} />
         )}
       </main>
+
+      {/* ── Mobile tab bar (the sidebar is hidden on small screens) ── */}
+      <nav className="tabbar" aria-label="Main">
+        {NAV.map((p) => (
+          <button key={p.name} className={activePage === p.name ? "active" : ""}
+            aria-current={activePage === p.name ? "page" : undefined} onClick={() => setActivePage(p.name)}>
+            <Icon name={p.icon} size={20} />
+            <span>{p.name}</span>
+          </button>
+        ))}
+      </nav>
     </div>
   );
 }
