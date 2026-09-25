@@ -7,7 +7,7 @@
 
 1. Open pgAdmin (or psql in terminal)
 2. Create a new database called: farmdash
-3. Open the Query Tool and run the file: database_schema.sql
+3. Open the Query Tool and run the file: backend/schema.sql
    - This creates all tables: nodes, sensor_readings, irrigation_log, aflc_decisions
    - It also inserts node1 and node2 starter data
 
@@ -15,7 +15,7 @@
 ## STEP 2 — Configure the backend .env file
 ==============================================================
 
-Open the file called `.env` in the SERVER folder.
+Open the file called `.env` in the backend folder.
 Fill in your actual Postgres details:
 
   DB_USER=postgres
@@ -29,9 +29,9 @@ Fill in your actual Postgres details:
 ## STEP 3 — Start the backend (Express) server
 ==============================================================
 
-Open a terminal and go into the SERVER folder:
+Open a terminal and go into the backend folder:
 
-  cd server
+  cd backend
   npm install
   npm run dev
 
@@ -45,7 +45,7 @@ Leave this terminal open and running.
 ## STEP 4 — Start the frontend (React / Vite)
 ==============================================================
 
-Open a SECOND terminal and go into the CLIENT folder
+Open a SECOND terminal and go into the leaf-dashboard (Client Dashboard) folder
 (the one with package.json and vite.config.js):
 
   npm install

@@ -14,7 +14,7 @@ React + Vite dashboard. Connects to the Express backend via Vite's proxy.
    cp .env.example .env
    ```
 
-3. Make sure the backend is running on port 5000, then start the frontend:
+3. Make sure the backend is running on port 3001, then start the frontend:
    ```bash
    npm run dev
    ```
@@ -30,7 +30,7 @@ React → axios → /api/clients
              ↓
         Vite proxy (vite.config.js)
              ↓
-        http://localhost:5000/api/clients  ← your Express backend
+      http://localhost:3001/api/nodes  ← your Express backend
              ↓
         PostgreSQL
 ```
