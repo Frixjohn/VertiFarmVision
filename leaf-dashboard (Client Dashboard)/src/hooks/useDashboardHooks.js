@@ -36,22 +36,27 @@ export function useAnimatedNumber(target, duration = 650) {
   return value;
 }
 
-/** Live width of an element, for responsive SVG charts. */
-export function useElementWidth(fallback = 480) {
+/** Live size of an element, for responsive SVG charts (and charts that fill their card). */
+export function useElementSize(fallbackW = 480, fallbackH = 220) {
   const ref = useRef(null);
-  const [width, setWidth] = useState(fallback);
+  const [size, setSize] = useState({ width: fallbackW, height: fallbackH });
 
   useEffect(() => {
     const el = ref.current;
     if (!el) return undefined;
-    setWidth(el.clientWidth || fallback);
+    const read = (w, h) => {
+      const width = Math.round(w) || fallbackW;
+      const height = Math.round(h) || fallbackH;
+      setSize((prev) => (prev.width === width && prev.height === height ? prev : { width, height }));
+    };
+    read(el.clientWidth, el.clientHeight);
     if (typeof ResizeObserver === "undefined") return undefined;
-    const ro = new ResizeObserver(([entry]) => setWidth(Math.round(entry.contentRect.width) || fallback));
+    const ro = new ResizeObserver(([entry]) => read(entry.contentRect.width, entry.contentRect.height));
     ro.observe(el);
     return () => ro.disconnect();
-  }, [fallback]);
+  }, [fallbackW, fallbackH]);
 
-  return [ref, width];
+  return [ref, size];
 }
 
 /** Re-renders on an interval so "updated 12s ago" stays truthful. */

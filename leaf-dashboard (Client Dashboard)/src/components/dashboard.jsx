@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useRef } from "react";
 import Icon from "./Icon";
 import { StatusPill } from "./ui";
 import TrendChart from "./charts/TrendChart";
@@ -9,7 +9,7 @@ import { useAnimatedNumber, timeAgo } from "../hooks/useDashboardHooks";
 import { METRICS, NODES, formatValue, getStatus, rangeLabel } from "../config/thresholds";
 
 // ── Health summary ────────────────────────────────────────────────────────────
-export function HealthSummary({ issues, connection, lastUpdated, now }) {
+export function HealthSummary({ issues, connection, lastUpdated, now, compact = false }) {
   const critical = issues.some((i) => i.critical);
   const offline = connection === "offline";
   const tone = offline || critical ? "danger" : issues.length ? "warning" : "success";
@@ -38,11 +38,11 @@ export function HealthSummary({ issues, connection, lastUpdated, now }) {
   const more = issues.filter((i) => !i.critical).length - shown.length;
 
   return (
-    <section className={`health health-${tone}`} aria-label="System health">
+    <section className={`health health-${tone} ${compact ? "health-compact" : ""}`} aria-label="System health">
       <span className="health-icon"><Icon name={icon} size={22} /></span>
       <div className="health-body">
         <h3>{title}</h3>
-        <p>{detail}</p>
+        {(!compact || offline || connection !== "connected") && <p>{detail}</p>}
         {!offline && shown.length > 0 && (
           <ul className="health-chips">
             {shown.map((i) => (
@@ -183,7 +183,11 @@ function ResTile({ metric, value, points }) {
   );
 }
 
-export function ReservoirPanel({ reservoir, points, onRunMotor, motorBusy, onCapture, cameraBusy }) {
+export function ReservoirPanel({
+  reservoir, points, onRunMotor, motorBusy, onCapture, cameraBusy,
+  onUploadImage, uploadBusy,
+}) {
+  const fileRef = useRef(null);
   const low = reservoir.waterLevelTriggered;
   return (
     <section className="card reservoir">
@@ -232,6 +236,19 @@ export function ReservoirPanel({ reservoir, points, onRunMotor, motorBusy, onCap
             <Icon name={cameraBusy ? "loader" : "camera"} size={16} />
             {cameraBusy ? "Capturing…" : "Capture image"}
           </button>
+
+          {/* TEMPORARY: manual image upload for testing the ML model without an ESP32-CAM */}
+          <button className="btn ghost" onClick={() => fileRef.current?.click()} disabled={uploadBusy}>
+            <Icon name={uploadBusy ? "loader" : "arrowUp"} size={16} />
+            {uploadBusy ? "Analysing…" : "Upload test image"}
+          </button>
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/*"
+            hidden
+            onChange={(e) => { onUploadImage?.(e.target.files?.[0]); e.target.value = ""; }}
+          />
         </div>
       </div>
     </section>

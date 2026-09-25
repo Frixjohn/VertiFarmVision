@@ -13,11 +13,11 @@
   padding: 38px 42px;
   width: 100%;
   max-width: 400px;
-  box-shadow: var(--card-shadow), 0 24px 70px rgba(82, 41, 143, 0.14);
+  box-shadow: var(--card-shadow), 0 24px 70px rgba(12, 122, 90, 0.16);
   text-align: center;
 }
 
-.theme-dark .login-card { box-shadow: var(--card-shadow), 0 0 90px rgba(160, 92, 236, 0.16); }
+.theme-dark .login-card { box-shadow: var(--card-shadow), 0 0 90px rgba(69, 214, 159, 0.16); }
 
 /* the fixture glow, positioned above the card */
 .login-card::before {
@@ -77,7 +77,7 @@
 
 .login-input {
   width: 100%;
-  background: rgba(124, 63, 209, 0.03);
+  background: var(--surface-2);
   border: 1px solid var(--glass-border);
   border-radius: var(--r-sm);
   color: var(--text-primary);

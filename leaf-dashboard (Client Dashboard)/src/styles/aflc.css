@@ -91,7 +91,41 @@
   font-style: italic;
 }
 
+.aflc-reason svg { flex-shrink: 0; }
+
 .reason-icon { font-size: 15px; flex-shrink: 0; }
+
+/* Keeps long backend-generated sentences (AFLC reason, etc.) from
+   stretching compact Overview cards — full text still on hover via title.
+   Used as a flex child alongside an icon, so it needs min-width:0 to shrink. */
+.clamp-1 {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.aflc-status-detail {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.aflc-status-detail li {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  padding: 3px 0;
+  border-bottom: 1px dashed var(--glass-border);
+}
+
+.aflc-status-detail li:last-child { border-bottom: none; }
+
+.aflc-status-detail strong { font-weight: 600; }
 
 .aflc-metrics { display: flex; flex-direction: column; gap: 5px; }
 

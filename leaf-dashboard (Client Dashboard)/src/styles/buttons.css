@@ -9,6 +9,7 @@
   transition: background var(--ease), border-color var(--ease), transform var(--ease), box-shadow var(--ease);
 }
 .btn:disabled { opacity: 0.55; cursor: not-allowed; }
+.btn.sm { padding: 6px 11px; font-size: 0.8rem; gap: 6px; }
 .btn:active:not(:disabled) { transform: translateY(1px); }
 
 .btn.primary { background: var(--brand); color: var(--on-brand); }
@@ -64,17 +65,20 @@
   background: var(--brand); color: var(--on-brand);
   box-shadow: var(--shadow-md);
 }
-.theme-dark .irrigate-banner { background: linear-gradient(135deg, #4a2a80, #33205a); color: #fff; }
+.theme-dark .irrigate-banner { background: linear-gradient(135deg, #0f5a41, #0a3d2c); color: #fff; }
 .irrigate-banner.irrigating { background: var(--brand-ink); }
-.theme-dark .irrigate-banner.irrigating { background: #2a1a48; }
+.theme-dark .irrigate-banner.irrigating { background: #08301f; }
 .irrigate-icon { display: grid; place-items: center; width: 52px; height: 52px; border-radius: var(--r-md); background: rgba(255, 255, 255, 0.16); flex-shrink: 0; }
 .irrigate-text { flex: 1; min-width: 220px; }
 .irrigate-text h3 { color: inherit; font-size: 1.2rem; }
 .irrigate-text p { font-size: 0.9rem; opacity: 0.85; margin-top: 2px; }
+.irrigate-aflc { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.irrigate-aflc-chip { padding: 4px 11px; border-radius: var(--r-pill); background: rgba(255, 255, 255, 0.16); font-size: 0.8rem; }
+.irrigate-aflc-chip strong { font-weight: 700; }
 .btn-irrigate-all {
   display: inline-flex; align-items: center; gap: 8px; flex-shrink: 0;
   padding: 12px 24px; border: 0; border-radius: var(--r-sm);
-  background: #fff; color: #4b2394; font-size: 0.933rem; font-weight: 700; cursor: pointer;
+  background: #fff; color: #075039; font-size: 0.933rem; font-weight: 700; cursor: pointer;
   transition: transform var(--ease), box-shadow var(--ease);
 }
 .btn-irrigate-all:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 6px 18px rgba(0, 0, 0, 0.2); }

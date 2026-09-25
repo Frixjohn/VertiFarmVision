@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { METRICS, formatValue, getStatus } from "../../config/thresholds";
-import { useElementWidth } from "../../hooks/useDashboardHooks";
+import { useElementSize } from "../../hooks/useDashboardHooks";
 
 const M = { top: 12, right: 14, bottom: 26, left: 44 };
 const GAP_MS = 90 * 1000; // break the line if readings stop for > 90 s
@@ -40,9 +40,12 @@ function Marker({ x, y, shape, color, r = 4.5 }) {
  *   points  – [{ t, node1: {...}, node2: {...} }]
  *   series  – [{ key, label, color, marker, get: (point) => number|undefined }]
  */
-export default function TrendChart({ metric, points, series, rangeMs = Infinity, height = 220 }) {
+export default function TrendChart({ metric, points, series, rangeMs = Infinity, height: fixedHeight = 220, fill = false }) {
   const meta = METRICS[metric];
-  const [wrapRef, width] = useElementWidth(520);
+  const [wrapRef, size] = useElementSize(520, 240);
+  const width = size.width;
+  // `fill` = take whatever height the parent gives us (used by the one-screen Overview)
+  const height = fill ? Math.max(size.height, 150) : fixedHeight;
   const [hover, setHover] = useState(null);
 
   const view = useMemo(() => {
@@ -68,7 +71,7 @@ export default function TrendChart({ metric, points, series, rangeMs = Infinity,
 
   if (!view) {
     return (
-      <div className="trend-empty" style={{ height }}>
+      <div className={`trend-empty ${fill ? "fill" : ""}`} ref={wrapRef} style={fill ? undefined : { height }}>
         <span>Waiting for the first readings…</span>
       </div>
     );
@@ -139,7 +142,7 @@ export default function TrendChart({ metric, points, series, rangeMs = Infinity,
     .join(", ");
 
   return (
-    <div className="trend" ref={wrapRef}>
+    <div className={`trend ${fill ? "fill" : ""}`} ref={wrapRef}>
       <svg
         width={W}
         height={height}

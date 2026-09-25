@@ -1,0 +1,103 @@
+/* ============================================================
+   overview.css — the one-screen Overview
+
+   Default (small / short screens): a normal stacked page.
+   ≥ 1280 × 600: locks to the viewport height and the trend
+   chart soaks up whatever space is left, so nothing scrolls.
+   ============================================================ */
+
+.overview { display: flex; flex-direction: column; gap: 14px; }
+
+/* Compact health strip */
+.health-compact { padding: 10px 16px; align-items: center; gap: 12px; }
+.health-compact .health-icon { width: 32px; height: 32px; }
+.health-compact .health-icon .icon { width: 18px; height: 18px; }
+.health-compact .health-body { display: flex; align-items: center; gap: 6px 14px; flex-wrap: wrap; }
+.health-compact h3 { font-size: 0.975rem; }
+.health-compact p { font-size: 0.867rem; margin: 0; }
+.health-compact .health-chips { margin: 0; gap: 6px; }
+.health-compact .health-chips li { padding: 2px 9px; font-size: 0.8rem; }
+
+/* KPI tiles */
+.stats-row.tiles { gap: 14px; }
+.stat-tile { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-md); padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; box-shadow: var(--shadow-sm); min-width: 0; }
+.stat-tile header { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.stat-tile header .pill { margin-left: auto; }
+.icon-badge.sm { width: 26px; height: 26px; border-radius: 7px; }
+.tile-main { display: flex; align-items: center; gap: 14px; }
+.tile-main .stat-value { font-size: 1.85rem; flex-shrink: 0; }
+.tile-main .spark { flex: 1; min-width: 56px; }
+
+/* Bottom grid */
+.ov-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.ov-trend { grid-column: 1 / -1; gap: 12px; min-height: 400px; }
+.ov-aflc { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+
+.trend-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
+.trend-head h3 { font-size: 1.05rem; }
+.trend-head p { font-size: 0.8rem; }
+.segmented.wide { display: flex; }
+.segmented.wide button { flex: 1; justify-content: center; }
+
+.trend-now { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.now-item.compact { padding: 9px 12px; gap: 3px; }
+.now-item.compact .now-value { font-size: 1.35rem; line-height: 1.15; }
+
+/* Trend chart in fill mode */
+.trend.fill, .trend-empty.fill { flex: 1 1 0; min-height: 170px; position: relative; }
+.trend.fill > svg { position: absolute; inset: 0; }
+.trend.fill .trend-hint { position: absolute; right: 12px; top: 6px; margin: 0; pointer-events: none; background: var(--surface); padding: 1px 6px; border-radius: 4px; }
+.trend-empty.fill { display: grid; }
+
+/* Compact AFLC card */
+.aflc-mini { gap: 12px; padding: 14px 16px; flex: 1; min-height: 0; justify-content: center; }
+.aflc-mini header { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.aflc-mini .aflc-badge { margin-left: auto; padding: 3px 10px; font-size: 0.75rem; }
+.confidence-row { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 10px; font-size: 0.833rem; color: var(--text-2); }
+.confidence-row strong { font-family: var(--font-display); font-size: 1.05rem; color: var(--text); font-variant-numeric: tabular-nums; }
+.aflc-reason.small { font-size: 0.833rem; padding: 8px 10px; }
+
+/* Compact reservoir card */
+.res-mini { gap: 10px; padding: 14px 16px; min-height: 0; }
+.res-mini .card-head { gap: 9px; }
+.res-mini .card-head h3 { font-size: 1rem; }
+.res-rows { display: flex; flex-direction: column; flex: 1; justify-content: space-between; min-height: 0; }
+.res-rows li { display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 10px; padding: 7px 0; border-top: 1px solid var(--border); font-size: 0.9rem; }
+.res-rows li:first-child { border-top: 0; }
+.res-rows strong { font-variant-numeric: tabular-nums; }
+.res-rows li.bad strong { color: var(--danger); }
+.res-mini .res-label { font-size: 0.867rem; }
+.res-btns { display: flex; flex-wrap: wrap; gap: 8px; }
+.res-btns .btn { flex: 1 1 100px; }
+.res-btns .btn { width: 100%; }
+
+/* Icon-only status (✓ ↑ ↓) */
+.status-icon { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: var(--surface-3); }
+.status-icon.tone-success { background: var(--success-soft); }
+.status-icon.tone-warning { background: var(--warning-soft); }
+.status-icon.tone-danger  { background: var(--danger-soft); }
+
+/* ── One-screen mode ─────────────────────────────────────── */
+@media (min-width: 1280px) and (min-height: 600px) {
+  .main.fit {
+    height: 100vh; /* fallback for browsers without dvh support */
+    height: 100dvh; /* accounts for mobile/tablet browser chrome (address bar etc.) */
+    min-height: 640px; padding-top: 20px; padding-bottom: 22px; gap: 16px;
+  }
+  .main.fit .overview { flex: 1; min-height: 0; }
+
+  .ov-grid { flex: 1; min-height: 0; grid-template-columns: 2fr 1fr 1fr; grid-template-rows: minmax(0, 1fr); }
+  .ov-trend { grid-column: auto; min-height: 0; }
+
+  /* At very tight heights, let the mini-card itself scroll internally rather
+     than hard-clipping with overflow:hidden — which was cutting off actions
+     like "Run motor" instead of just letting the page not-fit gracefully.
+     The header / badge / buttons are pinned so they're never what gets cut. */
+  .ov-aflc > .aflc-mini { overflow-y: auto; min-height: 0; }
+  .ov-aflc > .aflc-mini header,
+  .ov-aflc > .aflc-mini .confidence-row { flex-shrink: 0; }
+
+  .res-mini { overflow-y: auto; min-height: 0; }
+  .res-mini .card-head,
+  .res-mini .res-btns { flex-shrink: 0; }
+}

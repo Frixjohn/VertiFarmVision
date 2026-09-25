@@ -1,0 +1,28 @@
+{
+  "gains": {},
+  "condition_since": 1790315156.8602273,
+  "condition_key": "High Stress|Healthy",
+  "last_decision": {
+    "node": "2",
+    "decision": "IRRIGATE",
+    "confidence": 82.5,
+    "reason": "High Stress conditions confirmed for 3100s (hold 60s, plant healthy) \u2014 running pump 10s.",
+    "ecl": "High Stress",
+    "chs": "Healthy",
+    "stressScore": 0.5625,
+    "deviations": {
+      "co2": 0.0,
+      "temperature": 0.25,
+      "humidity": 1.0,
+      "light": 1.0
+    },
+    "holdDelaySec": 60,
+    "conditionPersistedSec": 3100.9,
+    "demandPct": 65.0,
+    "baseDurationSec": 10,
+    "adaptiveGainSec": 0.0,
+    "pumpDurationSec": 10,
+    "demandBracket": 3,
+    "timestamp": 1790318257.7804294
+  }
+}

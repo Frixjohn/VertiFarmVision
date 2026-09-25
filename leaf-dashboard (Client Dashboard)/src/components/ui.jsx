@@ -14,6 +14,15 @@ export function StatusPill({ status, children }) {
   );
 }
 
+/** Icon-only status for tight spaces. Shape (✓ / ↑ / ↓) + colour, with the word as its accessible name. */
+export function StatusIcon({ status }) {
+  return (
+    <span className={`status-icon tone-${status.tone}`} role="img" aria-label={status.label} title={status.label}>
+      <Icon name={STATUS_ICON[status.state] ?? "info"} size={13} strokeWidth={2.8} />
+    </span>
+  );
+}
+
 export function SectionHeader({ title, subtitle, children }) {
   return (
     <div className="section-header">
@@ -26,9 +35,9 @@ export function SectionHeader({ title, subtitle, children }) {
   );
 }
 
-export function Segmented({ label, options, value, onChange }) {
+export function Segmented({ label, options, value, onChange, className = "" }) {
   return (
-    <div className="segmented" role="group" aria-label={label}>
+    <div className={`segmented ${className}`} role="group" aria-label={label}>
       {options.map((o) => (
         <button
           key={o.key}

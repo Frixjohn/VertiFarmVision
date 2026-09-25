@@ -1,9 +1,10 @@
-import React, { useEffect, useRef, useState, useMemo, useCallback } from "react";
+import React, { Component, useEffect, useLayoutEffect, useRef, useState, useMemo, useCallback } from "react";
 import axios from "axios";
 import ExportButton from "./components/ExportButton";
 import Icon from "./components/Icon";
 import { NotificationBell, SensorEditModal, ToastStack } from "./components/ui";
 import OverviewView from "./views/OverviewView";
+import AnalyticsView from "./views/AnalyticsView";
 import SensorsView from "./views/SensorsView";
 import NodesView from "./views/NodesView";
 import SettingsView from "./views/SettingsView";
@@ -12,7 +13,7 @@ import { ENV_METRICS } from "./config/thresholds";
 import { timeAgo, useHistory, useNow } from "./hooks/useDashboardHooks";
 
 // ── Error Boundary — catches render crashes so you see an error instead of a white screen ──
-class ErrorBoundary extends React.Component {
+class ErrorBoundary extends Component {
   constructor(props) { super(props); this.state = { error: null }; }
   static getDerivedStateFromError(e) { return { error: e }; }
   render() {
@@ -141,7 +142,8 @@ function LoginScreen({ onLogin, theme }) {
 }
 
 const NAV = [
-  { name: "Overview", icon: "dashboard", sub: "Real-time vertical farm monitoring with AFLC" },
+  { name: "Overview",  icon: "dashboard", sub: "Live snapshot of the whole farm" },
+  { name: "Analytics", icon: "chart",     sub: "Trends, AFLC decisions and reservoir details" },
   { name: "Sensors",  icon: "gauge",     sub: "Live readings for every sensor, with manual overrides" },
   { name: "Nodes",    icon: "radio",     sub: "Node status and irrigation control" },
   { name: "Settings", icon: "settings",  sub: "Appearance, alerts and account" },
@@ -173,6 +175,11 @@ function AppInner() {
   const [dbStatus, setDbStatus] = useState("connecting");
   const [lastUpdated, setLastUpdated] = useState(null);
   const now = useNow(1000);
+
+  // ── Real AFLC decisions from the Python controller (via Postgres) ─────────
+  // Keyed by node1/node2, shape matches aflc_service.py's response
+  // (decision, confidence, reason, ecl, chs, demandPct, holdDelaySec, ...).
+  const [aflcDecisions, setAflcDecisions] = useState({});
 
   // ── Reservoir sensor data (universal — not node-based) ────────────────────
   const [reservoirData, setReservoirData] = useState({
@@ -207,13 +214,18 @@ function AppInner() {
     }
   }, []);
 
-  useEffect(() => {
+  // useLayoutEffect (not useEffect) so this runs synchronously right after
+  // React commits the DOM, before the browser paints — otherwise <html>/<body>
+  // stay light for a frame on every load (they inherit --bg from :root until
+  // this class lands), even though .app itself is already themed correctly.
+  // That's what reads as "dark mode is broken" / a flash of light theme.
+  useLayoutEffect(() => {
     localStorage.setItem("farmDash-theme", theme);
     // Apply class to <html> so CSS vars cascade to html/body/#root backgrounds
     document.documentElement.classList.toggle("theme-dark", theme === "dark");
   }, [theme]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     localStorage.setItem("farmDash-textsize", textSize);
     document.documentElement.classList.toggle("text-large", textSize === "large");
   }, [textSize]);
@@ -249,7 +261,46 @@ function AppInner() {
     }
   }, []);
 
-  // ── Load reservoir data ────────────────────────────────────────────────────
+  // ── Load real AFLC decisions (latest per node) from Postgres ──────────────
+  const loadAflc = useCallback(async (ids) => {
+    const entries = Object.entries(ids);
+    if (entries.length === 0) return;
+
+    const results = await Promise.all(
+      entries.map(async ([key, nodeId]) => {
+        try {
+          const { data } = await api.get(`/aflc/${nodeId}/latest`);
+          return [key, {
+            decision: data.decision,
+            confidence: parseFloat(data.confidence),
+            reason: data.reason,
+            ecl: data.ecl,
+            chs: data.chs,
+            stressScore: data.stress_score !== null ? parseFloat(data.stress_score) : null,
+            demandPct: data.demand_pct !== null ? parseFloat(data.demand_pct) : null,
+            demandBracket: data.demand_bracket,
+            holdDelaySec: data.hold_delay_sec,
+            pumpDurationSec: data.pump_duration_sec,
+            baseDurationSec: data.base_duration_sec,
+            adaptiveGainSec: data.adaptive_gain_sec !== null ? parseFloat(data.adaptive_gain_sec) : null,
+            conditionPersistedSec: data.condition_persisted_sec !== null ? parseFloat(data.condition_persisted_sec) : null,
+            deviations: data.deviations,
+            updatedAt: data.created_at,
+          }];
+        } catch {
+          return [key, null]; // 404 (nothing logged yet) or request failure — skip
+        }
+      })
+    );
+
+    setAflcDecisions((prev) => {
+      const next = { ...prev };
+      results.forEach(([key, value]) => { if (value) next[key] = value; });
+      return next;
+    });
+  }, []);
+
+
   const loadReservoir = useCallback(async () => {
     try {
       const { data } = await api.get("/reservoir");
@@ -319,6 +370,8 @@ function AppInner() {
     showToast(toastText, toastType);
   }, [showToast]);
 
+
+
   // ── Queue a camera capture command — ESP32 picks it up on its next POST ─────
   const captureCamera = useCallback(async () => {
     setCameraCapturing(true);
@@ -341,6 +394,35 @@ function AppInner() {
     const reservoirInterval = setInterval(loadReservoir, 8000);
     return () => { clearInterval(nodeInterval); clearInterval(reservoirInterval); };
   }, [user, loadNodes, loadReservoir]);
+
+  // ── Poll real AFLC decisions once node IDs are known ───────────────────────
+  useEffect(() => {
+    if (!user || Object.keys(nodeIds).length === 0) return;
+    loadAflc(nodeIds);
+    const aflcInterval = setInterval(() => loadAflc(nodeIds), 10000);
+    return () => clearInterval(aflcInterval);
+  }, [user, nodeIds, loadAflc]);
+
+  const [uploadBusy, setUploadBusy] = useState(false);
+
+const uploadImage = useCallback(async (file) => {
+  if (!file) return;
+  setUploadBusy(true);
+  try {
+    const base64 = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result.split(',')[1]);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+    const { data } = await api.post('/camera/analyze', { image_base64: base64 });
+    showImageNotification('Test image analyzed', `data:image/jpeg;base64,${base64}`, new Date().toISOString(), data.mlResult);
+  } catch (err) {
+    showToast(`Analysis failed: ${err.response?.data?.message || err.message}`, 'error');
+  } finally {
+    setUploadBusy(false);
+  }
+}, [showToast, showImageNotification]);
 
   // ── Water level alert: fire toast + reset banner dismiss when triggered ───
   useEffect(() => {
@@ -388,7 +470,12 @@ function AppInner() {
     Object.entries(nodeData).forEach(([nodeName, data]) => {
       const nodeId = nodeIds[nodeName];
       if (!nodeId) return;
-      api.post(`/aflc/${nodeId}`, calculateAFLCDecision(data)).catch(() => {});
+      api.post(`/aflc/${nodeId}`, {
+        temperature: data.temperature,
+        humidity: data.humidity,
+        co2: data.co2,
+        light: data.lux,
+      }).catch(() => {});
     });
   }, [nodeData, nodeIds, user]);
 
@@ -446,7 +533,10 @@ function AppInner() {
     return out;
   }, [n1, n2]);
 
-  const aflc = useMemo(() => ({ node1: calculateAFLCDecision(n1), node2: calculateAFLCDecision(n2) }), [n1, n2]);
+  const aflc = useMemo(() => ({
+    node1: aflcDecisions.node1 ?? calculateAFLCDecision(n1),
+    node2: aflcDecisions.node2 ?? calculateAFLCDecision(n2),
+  }), [aflcDecisions, n1, n2]);
   const issues = useMemo(() => computeIssues(nodes, reservoirData), [nodes, reservoirData]);
 
   // ── Record history only from real server data (never the placeholder defaults) ──
@@ -538,7 +628,7 @@ function AppInner() {
       </aside>
 
       {/* ── Main ── */}
-      <main className="main" id="main" tabIndex={-1}>
+      <main className={`main ${activePage === "Overview" ? "fit" : ""}`} id="main" tabIndex={-1}>
         <header className="main-head">
           <div>
             <h2 className="page-title">{activePage}</h2>
@@ -577,6 +667,26 @@ function AppInner() {
             nodes={nodes}
             averages={averages}
             nodeHistory={nodeHistory}
+            aflc={aflc}
+            reservoir={reservoirData}
+            issues={issues}
+            connection={dbStatus}
+            lastUpdated={lastUpdated}
+            now={now}
+            onRunMotor={triggerMotor}
+            motorBusy={motorTriggering}
+            onCapture={captureCamera}
+            cameraBusy={cameraCapturing}
+            onUploadImage={uploadImage}
+            uploadBusy={uploadBusy}
+          />
+        )}
+
+        {activePage === "Analytics" && (
+          <AnalyticsView
+            nodes={nodes}
+            averages={averages}
+            nodeHistory={nodeHistory}
             reservoirHistory={reservoirHistory}
             aflc={aflc}
             reservoir={reservoirData}
@@ -589,6 +699,8 @@ function AppInner() {
             motorBusy={motorTriggering}
             onCapture={captureCamera}
             cameraBusy={cameraCapturing}
+            onUploadImage={uploadImage}
+            uploadBusy={uploadBusy}
           />
         )}
 
@@ -603,7 +715,7 @@ function AppInner() {
         )}
 
         {activePage === "Nodes" && (
-          <NodesView nodes={nodes} irrigateAllStatus={irrigateAllStatus} onIrrigateAll={irrigateAll} />
+          <NodesView nodes={nodes} aflc={aflc} irrigateAllStatus={irrigateAllStatus} onIrrigateAll={irrigateAll} />
         )}
 
         {activePage === "Settings" && (

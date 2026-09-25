@@ -1,55 +1,66 @@
 /* ============================================================
    variables.css — design tokens for VertiFarmVision
 
-   Identity: the violet of full-spectrum grow lights is the brand
-   colour. Green / amber / red are reserved for STATUS only, so a
-   colour on screen always means something.
+   Identity: hydroponic green — deep emerald chrome, leaf-green
+   status, water-blue for the second node. Amber and red are
+   reserved for warnings and alarms, so a colour on screen always
+   means something.
    ============================================================ */
 
 @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap');
 
 :root {
-  /* Surfaces */
-  --bg: #f5f4f8;
+  /* Surfaces — a faint green tint, like a greenhouse in daylight */
+  --bg: #eff5f0;
   --surface: #ffffff;
-  --surface-2: #faf9fc;
-  --surface-3: #f1eff7;
-  --border: #e5e1ed;
-  --border-strong: #d2ccdf;
+  --surface-2: #f6faf7;
+  --surface-3: #e9f1ea;
+  --border: #d9e5db;
+  --border-strong: #bfd0c3;
 
   /* Text (all pairs ≥ 4.5:1 on their surface) */
-  --text: #1c1726;
-  --text-2: #463f55;
-  --muted: #655e72;
+  --text: #12241a;
+  --text-2: #33473a;
+  --muted: #587062;
 
-  /* Brand */
-  --brand: #6b32c8;
-  --brand-hover: #5a27ad;
-  --brand-soft: #efe9fb;
-  --brand-ink: #4b2394;
+  /* Brand — emerald */
+  --brand: #0c7a5a;
+  --brand-hover: #096349;
+  --brand-soft: #dff2e8;
+  --brand-ink: #075039;
   --on-brand: #ffffff;
 
   /* Status */
-  --success: #17804a;  --success-soft: #e4f4ec;
+  --success: #1e7434;  --success-soft: #e2f3e5;
   --warning: #9a5a08;  --warning-soft: #fdf0dc;
   --danger:  #c22f39;  --danger-soft:  #fbe7e9;
   --info:    #1f5db5;  --info-soft:    #e5edfa;
 
-  /* Chart encoding: Node 1 = violet circle, Node 2 = teal diamond */
-  --series-1: #7a3fd8;
-  --series-2: #0b8599;
-  --band: rgba(23, 128, 74, 0.10);
-  --band-edge: rgba(23, 128, 74, 0.45);
-  --grid: #ebe7f2;
+  /* Sidebar — deep grow-room green */
+  --side-bg: #0e2a1f;
+  --side-text: #d3e8db;
+  --side-muted: #93b4a1;
+  --side-hover: rgba(255, 255, 255, 0.07);
+  --side-active-bg: rgba(90, 226, 170, 0.15);
+  --side-active-text: #8ff3c8;
+  --side-accent: #4fe0a9;
+  --side-border: rgba(255, 255, 255, 0.10);
+
+  /* Chart encoding: Node 1 = green circle, Node 2 = water-blue diamond */
+  --series-1: #12935f;
+  --series-2: #2f6fd6;
+  --band: rgba(30, 116, 52, 0.10);
+  --band-edge: rgba(30, 116, 52, 0.45);
+  --grid: #e3ece5;
 
   /* Shape, depth, motion */
   --r-sm: 8px;
   --r-md: 12px;
   --r-lg: 16px;
   --r-pill: 999px;
-  --shadow-sm: 0 1px 2px rgba(28, 23, 38, 0.05);
-  --shadow-md: 0 4px 16px rgba(28, 23, 38, 0.08);
-  --shadow-lg: 0 20px 50px rgba(28, 23, 38, 0.18);
+  --shadow-sm: 0 1px 2px rgba(18, 36, 26, 0.06);
+  --shadow-md: 0 4px 16px rgba(18, 36, 26, 0.08);
+  --shadow-lg: 0 20px 50px rgba(18, 36, 26, 0.20);
   --ease: 160ms cubic-bezier(0.4, 0, 0.2, 1);
 
   /* Type — rem so the "Large text" setting scales everything */
@@ -68,7 +79,7 @@
   --card-shadow: var(--shadow-md);
   --text-primary: var(--text);
   --leaf-1: var(--brand-soft);
-  --leaf-2: #9c5ce0;
+  --leaf-2: #2fa876;
   --leaf-3: var(--brand);
   --leaf-4: var(--brand-ink);
   --accent: var(--warning);
@@ -81,39 +92,42 @@ html.text-large { font-size: 17px; }
 /* Dark theme — the grow room at night */
 .theme-dark,
 html.theme-dark {
-  --bg: #0f0d16;
-  --surface: #181422;
-  --surface-2: #1d1829;
-  --surface-3: #262035;
-  --border: #2d2742;
-  --border-strong: #40385a;
+  --bg: #0a130f;
+  --surface: #101d16;
+  --surface-2: #14241b;
+  --surface-3: #1b2e23;
+  --border: #213629;
+  --border-strong: #2f4d3a;
 
-  --text: #f2eff8;
-  --text-2: #d0cadf;
-  --muted: #a097b4;
+  --text: #e6f2ea;
+  --text-2: #c5d9cb;
+  --muted: #93ab9b;
 
-  --brand: #b98af2;
-  --brand-hover: #caa5f6;
-  --brand-soft: rgba(185, 138, 242, 0.15);
-  --brand-ink: #dcc8fb;
-  --on-brand: #1a0f28;
+  --brand: #45d69f;
+  --brand-hover: #6ee6bb;
+  --brand-soft: rgba(69, 214, 159, 0.15);
+  --brand-ink: #8ff0ca;
+  --on-brand: #05231a;
 
-  --success: #55d88b;  --success-soft: rgba(85, 216, 139, 0.14);
+  --success: #6fe391;  --success-soft: rgba(111, 227, 145, 0.14);
   --warning: #f2b04c;  --warning-soft: rgba(242, 176, 76, 0.14);
   --danger:  #ff7079;  --danger-soft:  rgba(255, 112, 121, 0.15);
   --info:    #6db3f7;  --info-soft:    rgba(109, 179, 247, 0.15);
 
-  --series-1: #b98af2;
-  --series-2: #4fd3e8;
-  --band: rgba(85, 216, 139, 0.11);
-  --band-edge: rgba(85, 216, 139, 0.5);
-  --grid: #2a2440;
+  --side-bg: #0c1a13;
+  --side-hover: rgba(255, 255, 255, 0.06);
+
+  --series-1: #4fd9a8;
+  --series-2: #6aa8ff;
+  --band: rgba(111, 227, 145, 0.11);
+  --band-edge: rgba(111, 227, 145, 0.5);
+  --grid: #1f3327;
 
   --shadow-sm: 0 1px 0 rgba(255, 255, 255, 0.03) inset;
   --shadow-md: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 8px 24px rgba(0, 0, 0, 0.35);
   --shadow-lg: 0 24px 60px rgba(0, 0, 0, 0.6);
 
-  --leaf-2: #c084f5;
+  --leaf-2: #5fe0b0;
   color: var(--text);
   color-scheme: dark;
 }
