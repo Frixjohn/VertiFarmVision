@@ -20,7 +20,7 @@ export function StatTile({ metric, value, history }) {
     <article className="stat-tile" aria-label={`Average ${meta.label}: ${formatValue(metric, value)}, ${status.label}`}>
       <header>
         <span className="icon-badge sm"><Icon name={meta.icon} size={15} /></span>
-        <span className="stat-label" title="Average of both nodes">{meta.short} <span className="muted">avg</span></span>
+        <span className="stat-label" title={NODES.length === 1 ? "Node reading" : "Average across nodes"}>{meta.short} <span className="muted">avg</span></span>
         <StatusPill status={status} />
       </header>
       <div className="tile-main">
@@ -34,7 +34,7 @@ export function StatTile({ metric, value, history }) {
   );
 }
 
-/** One metric at a time, both nodes, with the optimal range shaded. Fills its card. */
+/** One metric at a time, across all nodes, with the optimal range shaded. Fills its card. */
 export function TrendPanel({ nodes, points }) {
   const [metric, setMetric] = useState("temperature");
   const [rangeKey, setRangeKey] = useState("15m");

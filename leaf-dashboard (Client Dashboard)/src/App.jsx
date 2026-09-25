@@ -5,11 +5,10 @@ import Icon from "./components/Icon";
 import { NotificationBell, SensorEditModal, ToastStack } from "./components/ui";
 import OverviewView from "./views/OverviewView";
 import AnalyticsView from "./views/AnalyticsView";
-import SensorsView from "./views/SensorsView";
-import NodesView from "./views/NodesView";
+import TowersView from "./views/TowersView";
 import SettingsView from "./views/SettingsView";
 import { computeIssues } from "./config/health";
-import { ENV_METRICS } from "./config/thresholds";
+import { ENV_METRICS, NODES } from "./config/thresholds";
 import { timeAgo, useHistory, useNow } from "./hooks/useDashboardHooks";
 
 // ── Error Boundary — catches render crashes so you see an error instead of a white screen ──
@@ -144,8 +143,7 @@ function LoginScreen({ onLogin, theme }) {
 const NAV = [
   { name: "Overview",  icon: "dashboard", sub: "Live snapshot of the whole farm" },
   { name: "Analytics", icon: "chart",     sub: "Trends, AFLC decisions and reservoir details" },
-  { name: "Sensors",  icon: "gauge",     sub: "Live readings for every sensor, with manual overrides" },
-  { name: "Nodes",    icon: "radio",     sub: "Node status and irrigation control" },
+  { name: "Towers",   icon: "radio",     sub: "Tower sensors, irrigation control and AFLC status" },
   { name: "Settings", icon: "settings",  sub: "Appearance, alerts and account" },
 ];
 
@@ -169,7 +167,6 @@ function AppInner() {
   // ── Node sensor data: Temp, Humidity, CO₂, Light ──────────────────────────
   const [nodeData, setNodeData] = useState({
     node1: { temperature: 24.5, humidity: 65, co2: 800, lux: 0, lastIrrigation: "2 hours ago", irrigationStatus: "idle" },
-    node2: { temperature: 23.8, humidity: 68, co2: 820, lux: 0, lastIrrigation: "3 hours ago", irrigationStatus: "idle" },
   });
   const [nodeIds, setNodeIds] = useState({});
   const [dbStatus, setDbStatus] = useState("connecting");
@@ -177,8 +174,9 @@ function AppInner() {
   const now = useNow(1000);
 
   // ── Real AFLC decisions from the Python controller (via Postgres) ─────────
-  // Keyed by node1/node2, shape matches aflc_service.py's response
-  // (decision, confidence, reason, ecl, chs, demandPct, holdDelaySec, ...).
+  // Keyed by node key (see NODES in config/thresholds), shape matches
+  // aflc_service.py's response (decision, confidence, reason, ecl, chs,
+  // demandPct, holdDelaySec, ...).
   const [aflcDecisions, setAflcDecisions] = useState({});
 
   // ── Reservoir sensor data (universal — not node-based) ────────────────────
@@ -236,7 +234,7 @@ function AppInner() {
       const { data: rows } = await api.get("/nodes");
       const mapped = {};
       const ids = {};
-      const keyMap = { "NODE-01": "node1", "NODE-02": "node2" };
+      const keyMap = { "NODE-01": "node1" };
 
       rows.forEach((row) => {
         const key = keyMap[row.name] || row.name.toLowerCase().replace(/[^a-z0-9]/g, "");
@@ -250,8 +248,10 @@ function AppInner() {
         };
         ids[key] = row.id;
       });
-      // Merge into defaults so node1/node2 are never undefined even if the
-      // server returns 0 rows or the DB node names don't match the keyMap.
+      // Merge into defaults so node1 is never undefined even if the server
+      // returns 0 rows. Any row not in NODES (e.g. a stray NODE-02 posting)
+      // still lands in nodeData/nodeIds under its own key, but nothing in
+      // NODES iterates over it, so it never reaches the UI.
       setNodeData(prev => ({ ...prev, ...mapped }));
       setNodeIds(ids);
       setDbStatus("connected");
@@ -522,28 +522,37 @@ const uploadImage = useCallback(async (file) => {
   }, []);
 
   // ── Safe node accessors — guards against loadNodes returning {} ───────────
-  const n1 = nodeData.node1 ?? { temperature: 24.5, humidity: 65, co2: 800, lux: 0, lastIrrigation: "Never", irrigationStatus: "idle" };
-  const n2 = nodeData.node2 ?? { temperature: 23.8, humidity: 68, co2: 820, lux: 0, lastIrrigation: "Never", irrigationStatus: "idle" };
-  const nodes = useMemo(() => ({ node1: n1, node2: n2 }), [n1, n2]);
+  const DEFAULT_NODE = { temperature: 24.5, humidity: 65, co2: 800, lux: 0, lastIrrigation: "Never", irrigationStatus: "idle" };
+  const nodes = useMemo(() => {
+    const out = {};
+    NODES.forEach(({ key }) => { out[key] = nodeData[key] ?? DEFAULT_NODE; });
+    return out;
+  }, [nodeData]);
 
   // ── Computed averages (node-based) ─────────────────────────────────────────
   const averages = useMemo(() => {
     const out = {};
-    ENV_METRICS.forEach((m) => { out[m] = ((n1[m] ?? 0) + (n2[m] ?? 0)) / 2; });
+    const nodeList = Object.values(nodes);
+    ENV_METRICS.forEach((m) => {
+      out[m] = nodeList.reduce((sum, n) => sum + (n[m] ?? 0), 0) / nodeList.length;
+    });
     return out;
-  }, [n1, n2]);
+  }, [nodes]);
 
-  const aflc = useMemo(() => ({
-    node1: aflcDecisions.node1 ?? calculateAFLCDecision(n1),
-    node2: aflcDecisions.node2 ?? calculateAFLCDecision(n2),
-  }), [aflcDecisions, n1, n2]);
+  const aflc = useMemo(() => {
+    const out = {};
+    NODES.forEach(({ key }) => { out[key] = aflcDecisions[key] ?? calculateAFLCDecision(nodes[key]); });
+    return out;
+  }, [aflcDecisions, nodes]);
   const issues = useMemo(() => computeIssues(nodes, reservoirData), [nodes, reservoirData]);
 
   // ── Record history only from real server data (never the placeholder defaults) ──
   useEffect(() => {
     if (dbStatus !== "connected") return;
     const pick = (d) => ({ temperature: d.temperature, humidity: d.humidity, co2: d.co2, lux: d.lux });
-    pushNodeHistory({ node1: pick(n1), node2: pick(n2) });
+    const snapshot = {};
+    NODES.forEach(({ key }) => { snapshot[key] = pick(nodes[key]); });
+    pushNodeHistory(snapshot);
   }, [nodeData, dbStatus]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
@@ -563,7 +572,7 @@ const uploadImage = useCallback(async (file) => {
   if (!user) return <LoginScreen onLogin={setUser} theme={theme} />;
 
   const page = NAV.find((p) => p.name === activePage);
-  const nodeCount = Object.keys(nodeIds).length;
+  const nodeCount = NODES.filter(({ key }) => nodeIds[key] != null).length;
 
   // ── Dashboard ──────────────────────────────────────────────────────────────
   return (
@@ -600,7 +609,7 @@ const uploadImage = useCallback(async (file) => {
             >
               <Icon name={p.icon} size={18} />
               {p.name}
-              {p.name === "Sensors" && reservoirData.waterLevelTriggered && (
+              {p.name === "Towers" && reservoirData.waterLevelTriggered && (
                 <span className="nav-alert-dot" title="Water level alert" aria-label="Water level alert" />
               )}
             </button>
@@ -612,7 +621,7 @@ const uploadImage = useCallback(async (file) => {
             <span className="dot" />
             <div>
               <strong>{dbStatus === "connected" ? "System active" : dbStatus === "offline" ? "Server offline" : "Connecting…"}</strong>
-              <span className="tiny">{dbStatus === "connected" ? `${nodeCount || 2} nodes reporting` : "Waiting for data"}</span>
+              <span className="tiny">{dbStatus === "connected" ? `Tower 1 · ${nodeCount || NODES.length} node${(nodeCount || NODES.length) === 1 ? "" : "s"} reporting` : "Waiting for data"}</span>
             </div>
           </div>
           {reservoirData.waterLevelTriggered && (
@@ -704,18 +713,17 @@ const uploadImage = useCallback(async (file) => {
           />
         )}
 
-        {activePage === "Sensors" && (
-          <SensorsView
+        {activePage === "Towers" && (
+          <TowersView
             nodes={nodes}
             nodeHistory={nodeHistory}
             reservoir={reservoirData}
             reservoirHistory={reservoirHistory}
+            aflc={aflc}
+            irrigateAllStatus={irrigateAllStatus}
+            onIrrigateAll={irrigateAll}
             onEdit={setEditingSensor}
           />
-        )}
-
-        {activePage === "Nodes" && (
-          <NodesView nodes={nodes} aflc={aflc} irrigateAllStatus={irrigateAllStatus} onIrrigateAll={irrigateAll} />
         )}
 
         {activePage === "Settings" && (

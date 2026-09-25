@@ -10,7 +10,7 @@ export const nodeSeries = (metric) =>
     get: (p) => p[n.key]?.[metric],
   }));
 
-/** Average of both nodes at each history point — feeds the KPI sparklines. */
+/** Average across nodes at each history point — feeds the KPI sparklines. */
 export const averageValues = (points, metric) =>
   points.map((p) => {
     const vals = NODES.map((n) => p[n.key]?.[metric]).filter(Number.isFinite);

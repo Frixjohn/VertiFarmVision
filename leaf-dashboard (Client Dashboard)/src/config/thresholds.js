@@ -16,7 +16,6 @@ export const METRICS = {
 
 export const NODES = [
   { key: "node1", name: "Node 1", layer: "Layer 1", color: "var(--series-1)", marker: "circle" },
-  { key: "node2", name: "Node 2", layer: "Layer 2", color: "var(--series-2)", marker: "diamond" },
 ];
 
 export const ENV_METRICS = ["temperature", "humidity", "co2", "lux"];

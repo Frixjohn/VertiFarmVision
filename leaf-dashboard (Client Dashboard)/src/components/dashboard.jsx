@@ -31,7 +31,7 @@ export function HealthSummary({ issues, connection, lastUpdated, now, compact = 
     detail = "Check the highlighted sensors below.";
   } else {
     title = "All readings are within their optimal range";
-    detail = `Both nodes and the reservoir look healthy. Last reading ${timeAgo(lastUpdated, now)}.`;
+    detail = `${NODES.length === 1 ? "The node" : "All nodes"} and the reservoir look healthy. Last reading ${timeAgo(lastUpdated, now)}.`;
   }
 
   const shown = issues.filter((i) => !i.critical).slice(0, 4);

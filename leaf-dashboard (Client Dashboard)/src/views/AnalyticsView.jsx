@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import Icon from "../components/Icon";
 import { HealthSummary, StatCard, MetricCard, AflcCard, ReservoirPanel, PlantHealthCard } from "../components/dashboard";
 import { SectionHeader, Segmented } from "../components/ui";
 import { averageValues } from "../components/charts/series";
@@ -24,7 +25,7 @@ export default function AnalyticsView({
       </section>
 
       <section>
-        <SectionHeader title="AFLC decisions" subtitle="Adaptive fuzzy logic controller: irrigation advice per node" />
+        <SectionHeader title="AFLC decisions · Tower 1" subtitle="Adaptive fuzzy logic controller: irrigation advice per node" />
         <div className="grid-2">
           {NODES.map((n) => (
             <AflcCard key={n.key} node={n} data={nodes[n.key]} decision={aflc[n.key]} />
@@ -33,7 +34,7 @@ export default function AnalyticsView({
       </section>
 
       <section>
-        <SectionHeader title="Environment by node" subtitle="Shaded band = optimal range. Hover or use ← → on a chart to inspect readings.">
+        <SectionHeader title="Environment by node · Tower 1" subtitle="Shaded band = optimal range. Hover or use ← → on a chart to inspect readings.">
           <Segmented label="Trend window" options={HISTORY_RANGES} value={rangeKey} onChange={setRangeKey} />
         </SectionHeader>
         <div className="grid-2">
@@ -41,6 +42,11 @@ export default function AnalyticsView({
             <MetricCard key={m} metric={m} nodes={nodes} points={nodeHistory} rangeMs={rangeMs} />
           ))}
         </div>
+      </section>
+
+      <section className="tower-waiting-inline">
+        <Icon name="hourglass" size={16} />
+        <span>Tower 2 isn't connected yet — its analytics will appear here once it comes online.</span>
       </section>
 
       <ReservoirPanel

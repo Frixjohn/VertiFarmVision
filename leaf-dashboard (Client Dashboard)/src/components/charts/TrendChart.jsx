@@ -37,7 +37,7 @@ function Marker({ x, y, shape, color, r = 4.5 }) {
 
 /**
  * Multi-series live trend chart with the metric's optimal range shaded.
- *   points  – [{ t, node1: {...}, node2: {...} }]
+ *   points  – [{ t, node1: {...}, ... }] — one key per entry in NODES
  *   series  – [{ key, label, color, marker, get: (point) => number|undefined }]
  */
 export default function TrendChart({ metric, points, series, rangeMs = Infinity, height: fixedHeight = 220, fill = false }) {

@@ -73,7 +73,9 @@ export default function SensorsView({ nodes, nodeHistory, reservoir, reservoirHi
               history={reservoirHistory.map((p) => p[m])}
             />
           ))}
+        </div>
 
+        <div className="reservoir-status-grid">
           <article className={`sensor-card ${low ? "state-danger" : "state-ok"}`}>
             <header><span className="sensor-name"><Icon name="droplet" size={15} />Water level</span></header>
             <div className="sensor-value">{low ? "Low" : "Sufficient"}</div>

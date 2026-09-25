@@ -100,6 +100,12 @@
 
 /* ── Sensors page ── */
 .sensor-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+/* Reservoir status row (Water level / Stepper motor): kept out of .sensor-grid
+   on purpose. Those two cards have no gauge/sparkline, so sharing a grid row
+   with the taller ph/tds/turbidity cards stretched them to match and left an
+   ugly patch of empty space in the middle/bottom of the card. Own row = own
+   (shorter, equal) height for both, no stretch mismatch. */
+.reservoir-status-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
 .sensor-card { padding: 14px 16px; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--r-sm); display: flex; flex-direction: column; align-items: flex-start; gap: 9px; min-width: 0; }
 .sensor-card > .gauge, .sensor-card > .spark { width: 100%; }
 .sensor-card header { width: 100%; display: flex; justify-content: space-between; align-items: center; }
@@ -143,3 +149,23 @@
 .about .btn { margin-top: 12px; }
 
 .stack > section.card > .section-header { margin-bottom: 0; }
+
+/* ── Towers tab (merged Nodes + Sensors) ─────────────────────────────────── */
+.tower-block { display: flex; flex-direction: column; gap: 14px; }
+
+.tower-waiting {
+  border-style: dashed;
+  opacity: 0.75;
+}
+.tower-waiting .waiting-state h3 { margin: 4px 0 0; font-size: 15px; }
+
+.tower-waiting-inline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: var(--r-sm);
+  border: 1px dashed var(--glass-border);
+  color: var(--muted);
+  font-size: 13px;
+}

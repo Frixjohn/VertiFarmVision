@@ -108,8 +108,8 @@ export default function NodesView({ nodes, aflc, irrigateAllStatus, onIrrigateAl
           <header className="card-head">
             <span className="icon-badge"><Icon name="radio" size={16} /></span>
             <div>
-              <h3>Node 3</h3>
-              <p className="muted">Layer 3</p>
+              <h3>Node 2</h3>
+              <p className="muted">Layer 2</p>
             </div>
             <span className="pill tone-warning">Waiting</span>
           </header>

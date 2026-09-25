@@ -6,7 +6,7 @@
     "node": "1",
     "decision": "IRRIGATE",
     "confidence": 82.5,
-    "reason": "High Stress conditions confirmed for 4273s (hold 60s, plant healthy) \u2014 running pump 10s.",
+    "reason": "High Stress conditions confirmed for 10203s (hold 60s, plant healthy) \u2014 running pump 10s.",
     "ecl": "High Stress",
     "chs": "Healthy",
     "stressScore": 0.5625,
@@ -17,12 +17,12 @@
       "light": 1.0
     },
     "holdDelaySec": 60,
-    "conditionPersistedSec": 4274.0,
+    "conditionPersistedSec": 10203.9,
     "demandPct": 65.0,
     "baseDurationSec": 10,
     "adaptiveGainSec": 0.0,
     "pumpDurationSec": 10,
     "demandBracket": 3,
-    "timestamp": 1790318287.825522
+    "timestamp": 1790324217.7420976
   }
 }
