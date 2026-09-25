@@ -14,7 +14,7 @@ Express + PostgreSQL API server.
    cp .env.example .env
    ```
 
-3. Run the SQL in `server.js` (bottom of file) to create your tables in PostgreSQL.
+3. Create the `farmdash` database, then run `schema.sql` against it to create the tables.
 
 4. Start the server:
    ```bash
@@ -22,7 +22,9 @@ Express + PostgreSQL API server.
    npm start     # plain node
    ```
 
-Server runs on **http://localhost:5000**
+Server runs on **http://localhost:3001**
+
+Health check: **http://localhost:3001/api/health**
 
 ## API Endpoints
 
@@ -39,4 +41,4 @@ Server runs on **http://localhost:5000**
 | GET | /api/stats/overview | Dashboard stat cards |
 | GET | /api/stats/chart | Chart data |
 
-WebSocket available at `ws://localhost:5000`
+WebSocket available at `ws://localhost:3001`

@@ -15,7 +15,9 @@ const bcrypt     = require('bcryptjs');
 const jwt        = require('jsonwebtoken');
 const { WebSocketServer } = require('ws');
 const http       = require('http');
-require('dotenv').config();
+const fs         = require('fs');
+const path       = require('path');
+require('dotenv').config({ path: path.join(__dirname, '.env'), override: true });
 
 const app    = express();
 const server = http.createServer(app);
@@ -30,7 +32,20 @@ const pool = new Pool({
 });
 
 pool.connect()
-  .then(() => console.log('✅ PostgreSQL connected'))
+  .then(async client => {
+    try {
+      const existingSchema = await client.query(
+        `SELECT 1 FROM information_schema.tables
+         WHERE table_schema = 'public' AND table_name = 'users'`
+      );
+      if (existingSchema.rowCount === 0) {
+        await client.query(fs.readFileSync(path.join(__dirname, 'schema.sql'), 'utf8'));
+      }
+      console.log('✅ PostgreSQL connected and schema ready');
+    } finally {
+      client.release();
+    }
+  })
   .catch(err => console.error('❌ PostgreSQL connection error:', err));
 
 // ── Middleware ────────────────────────────────────────────────────────────────
@@ -39,6 +54,30 @@ app.use(cors({
   credentials: true,
 }));
 app.use(express.json());
+
+app.get('/api/health', async (req, res) => {
+  try {
+    await pool.query('SELECT 1');
+    const result = await pool.query(
+      `SELECT COUNT(*)::int AS table_count
+       FROM information_schema.tables
+       WHERE table_schema = 'public'
+         AND table_name IN ('users', 'nodes', 'sensor_readings', 'irrigation_log', 'aflc_decisions')`
+    );
+    const schemaReady = result.rows[0].table_count === 5;
+    if (!schemaReady) {
+      return res.status(503).json({
+        status: 'error',
+        database: 'connected',
+        schema: 'missing',
+        message: 'Run backend/schema.sql against the farmdash database',
+      });
+    }
+    res.json({ status: 'ok', database: 'connected', schema: 'ready' });
+  } catch (err) {
+    res.status(503).json({ status: 'error', database: 'unavailable', schema: 'unknown', message: err.message });
+  }
+});
 
 // ── JWT Auth Middleware ───────────────────────────────────────────────────────
 function requireAuth(req, res, next) {
@@ -84,14 +123,25 @@ let irrigationCommandPending = false;
 
 // POST /api/auth/login
 app.post('/api/auth/login', async (req, res) => {
-  const { email, password } = req.body;
+  const email = String(req.body.email || '').trim().toLowerCase();
+  const password = String(req.body.password || '');
+  if (!email || !password) return res.status(400).json({ message: 'Email and password are required' });
   try {
-    const result = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
+    const result = await pool.query('SELECT * FROM users WHERE LOWER(TRIM(email)) = $1', [email]);
     const user   = result.rows[0];
     if (!user) return res.status(401).json({ message: 'Invalid credentials' });
 
-    const valid = await bcrypt.compare(password, user.password);
+    const isBcryptHash = /^\$2[aby]?\$\d{2}\$/.test(user.password);
+    const valid = isBcryptHash
+      ? await bcrypt.compare(password, user.password)
+      : password === user.password;
     if (!valid) return res.status(401).json({ message: 'Invalid credentials' });
+
+    // Upgrade accounts created before password hashing was enabled.
+    if (!isBcryptHash) {
+      const passwordHash = await bcrypt.hash(password, 12);
+      await pool.query('UPDATE users SET password = $1 WHERE id = $2', [passwordHash, user.id]);
+    }
 
     const token = jwt.sign(
       { id: user.id, email: user.email },
