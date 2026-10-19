@@ -203,7 +203,7 @@ export function ReservoirPanel({
       <div className="res-grid">
         <ResTile metric="ph" value={reservoir.waterPH} points={points} />
         <ResTile metric="tds" value={reservoir.tds} points={points} />
-        <ResTile metric="turbidity" value={reservoir.turbidity} points={points} />
+        <ResTile metric="clarity" value={reservoir.clarity} points={points} />
 
         <div className={`res-tile ${low ? "res-danger" : ""}`}>
           <div className="res-tile-top">

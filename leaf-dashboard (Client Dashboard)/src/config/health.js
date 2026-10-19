@@ -24,7 +24,7 @@ export function computeIssues(nodes, reservoir) {
   [
     ["ph", reservoir.waterPH],
     ["tds", reservoir.tds],
-    ["turbidity", reservoir.turbidity],
+    ["clarity", reservoir.clarity],
   ].forEach(([metric, value]) => {
     const status = getStatus(metric, value);
     if (status.state === "low" || status.state === "high") {

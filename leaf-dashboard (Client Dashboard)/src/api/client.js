@@ -23,6 +23,10 @@ import axios from 'axios';
 // In production, set VITE_API_URL in your .env file.
 const BASE_URL = import.meta.env.VITE_API_URL || '/api';
 
+// MUST match the key App.jsx saves the JWT under at login.
+// (This file used to read 'token', which App.jsx never writes -> "No token provided".)
+const TOKEN_KEY = 'farmDash-token';
+
 const api = axios.create({
   baseURL: BASE_URL,
   headers: {
@@ -35,7 +39,7 @@ const api = axios.create({
 // Automatically attaches the JWT token (if any) to every request.
 api.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('token');
+    const token = localStorage.getItem(TOKEN_KEY);
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -53,8 +57,9 @@ api.interceptors.response.use(
   (error) => {
     const isLoginRequest = error.config?.url?.includes('/auth/login');
     if (error.response?.status === 401 && !isLoginRequest) {
-      localStorage.removeItem('token');
-      window.location.href = '/login';
+      localStorage.removeItem(TOKEN_KEY);
+      // App.jsx has no /login route (login is shown by state), so just reload.
+      window.location.reload();
     }
     return Promise.reject(error);
   }

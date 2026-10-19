@@ -4,12 +4,12 @@ import api from './client';
 export const authService = {
   login: async (email, password) => {
     const { data } = await api.post('/auth/login', { email, password });
-    if (data.token) localStorage.setItem('token', data.token);
+    if (data.token) localStorage.setItem('farmDash-token', data.token);
     return data;
   },
   logout: async () => {
     await api.post('/auth/logout');
-    localStorage.removeItem('token');
+    localStorage.removeItem('farmDash-token');
   },
   getMe: async () => {
     const { data } = await api.get('/auth/me');

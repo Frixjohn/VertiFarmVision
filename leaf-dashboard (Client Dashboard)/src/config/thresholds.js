@@ -11,7 +11,7 @@ export const METRICS = {
   lux:         { label: "Light",       short: "Light",    unit: "lx",  sep: " ", decimals: 0, optimal: [5000, 80000], scale: [0, 100000],  icon: "sun",         source: "BH1750" },
   ph:          { label: "Water pH",    short: "pH",       unit: "",    sep: "",  decimals: 1, optimal: [5.5, 7.0],   scale: [4, 9],        icon: "flask",       source: "Atlas Scientific EZO-pH" },
   tds:         { label: "TDS",         short: "TDS",      unit: "ppm", sep: " ", decimals: 0, optimal: [500, 1500],  scale: [0, 2000],     icon: "zap",         source: "Total dissolved solids" },
-  turbidity:   { label: "Turbidity",   short: "Turbidity", unit: "NTU", sep: " ", decimals: 0, optimal: [0, 50],     scale: [0, 100],      icon: "waves",       source: "Water clarity index", maxExclusive: true },
+  clarity:     { label: "Clarity",     short: "Clarity",  unit: "%",   sep: "",  decimals: 0, optimal: [85, 100],   scale: [0, 100],      icon: "waves",       source: "Optical sensor, % of clear water" },
 };
 
 export const NODES = [
@@ -31,7 +31,7 @@ export function formatValue(key, value, { unit = true } = {}) {
   return unit && m.unit ? `${num}${m.sep}${m.unit}` : num;
 }
 
-/** "22–26 °C", "< 50 NTU" */
+/** "22–26 °C", "85–100%" */
 export function rangeLabel(key) {
   const m = METRICS[key];
   const [lo, hi] = m.optimal;

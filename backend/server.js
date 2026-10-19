@@ -19,6 +19,11 @@ const { WebSocketServer } = require('ws');
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
+const {
+  buildWorkbook,
+  getExportOptions,
+  parseExportParams,
+} = require('./exportXlsx');
 
 require('dotenv').config({
   path: path.join(__dirname, '.env'),
@@ -377,6 +382,7 @@ app.post('/api/sensor-data', async (req, res) => {
     soil_moisture,
     soil_ph,
     lux,
+    co2,
   } = req.body;
 
   if (!node_id) {
@@ -400,7 +406,8 @@ app.post('/api/sensor-data', async (req, res) => {
          humidity,
          soil_moisture,
          soil_ph,
-         lux
+         lux,
+         co2
        )
        VALUES (
          $1,
@@ -410,7 +417,8 @@ app.post('/api/sensor-data', async (req, res) => {
          $3,
          $4,
          $5,
-         $6
+         $6,
+         $7
        )
        ON CONFLICT (node_id) DO UPDATE SET
          temperature =
@@ -423,6 +431,8 @@ app.post('/api/sensor-data', async (req, res) => {
            COALESCE(EXCLUDED.soil_ph, nodes.soil_ph),
          lux =
            COALESCE(EXCLUDED.lux, nodes.lux),
+         co2 =
+           COALESCE(EXCLUDED.co2, nodes.co2),
          updated_at = NOW()`,
       [
         node_id,
@@ -431,6 +441,7 @@ app.post('/api/sensor-data', async (req, res) => {
         soil_moisture ?? null,
         soil_ph ?? null,
         lux ?? null,
+        co2 ?? null,
       ]
     );
 
@@ -442,9 +453,10 @@ app.post('/api/sensor-data', async (req, res) => {
          humidity,
          soil_moisture,
          soil_ph,
-         lux
+         lux,
+         co2
        )
-       VALUES ($1, $2, $3, $4, $5, $6)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
        RETURNING *`,
       [
         node_id,
@@ -453,6 +465,7 @@ app.post('/api/sensor-data', async (req, res) => {
         soil_moisture ?? null,
         soil_ph ?? null,
         lux ?? null,
+        co2 ?? null,
       ]
     );
 
@@ -464,16 +477,10 @@ app.post('/api/sensor-data', async (req, res) => {
       data: reading.rows[0],
     });
 
-    // Consume pending irrigation command
-    const triggerPump = irrigationCommandPending;
-
-    if (triggerPump) {
-      irrigationCommandPending = false;
-
-      console.log(
-        `[PUMP] Irrigation command dispatched to ESP32 (${node_id})`
-      );
-    }
+    // NOTE: the pump flag is consumed ONLY by the actuator board via
+    // GET /api/irrigation/command. The environment node has no pump, so it
+    // must not swallow the command here.
+    const triggerPump = false;
 
     console.log(
       `[ESP32] ${node_id} → temp=${temperature} ` +
@@ -527,6 +534,7 @@ app.get('/api/nodes', requireAuth, async (_req, res) => {
         COALESCE(soil_moisture, 72.0) AS soil_moisture,
         COALESCE(soil_ph, 6.8) AS soil_ph,
         COALESCE(lux, 0.0) AS lux,
+        COALESCE(co2, 800.0) AS co2,
         COALESCE(irrigation_status, 'idle') AS irrigation_status,
         CASE
           WHEN last_irrigation IS NULL
@@ -693,7 +701,7 @@ app.post(
          )
          VALUES ($1, $2)`,
         [
-          update.rows[0].node_id,
+          update.rows[0].id,
           triggeredBy,
         ]
       );
@@ -750,14 +758,28 @@ app.post(
   '/api/irrigate-all',
   requireAuth,
   async (req, res) => {
-    const { triggeredBy = 'manual' } = req.body;
+    const { triggeredBy = 'manual' } = req.body || {};
 
+    // 1. Queue the pump command FIRST. The physical pump must never
+    //    depend on database bookkeeping succeeding.
+    irrigationCommandPending = true;
+
+    console.log(
+      '[IRRIGATE-ALL] Pump flag set — actuator ESP32 will pick it up on its next poll'
+    );
+
+    let nodesTriggered = 0;
+    let dbWarning = null;
+
+    // 2. Bookkeeping (node status + irrigation log). Non-fatal.
     try {
       const nodes = await pool.query(
         `SELECT id, node_id
          FROM nodes
          WHERE is_active = true`
       );
+
+      nodesTriggered = nodes.rows.length;
 
       for (const node of nodes.rows) {
         await pool.query(
@@ -768,34 +790,27 @@ app.post(
           [node.id]
         );
 
-        await pool.query(
-          `INSERT INTO irrigation_log (
-             node_id,
-             triggered_by
-           )
-           VALUES ($1, $2)`,
-          [
-            node.node_id,
-            triggeredBy,
-          ]
-        );
+        try {
+          await pool.query(
+            `INSERT INTO irrigation_log (
+               node_id,
+               triggered_by
+             )
+             VALUES ($1, $2)`,
+            [
+              node.id,
+              triggeredBy,
+            ]
+          );
+        } catch (logErr) {
+          dbWarning = `irrigation_log insert failed: ${logErr.message}`;
+
+          console.error(
+            '[IRRIGATE-ALL] irrigation_log insert failed:',
+            logErr.message
+          );
+        }
       }
-
-      // Signal the ESP32 to fire the pump
-      // on its next request.
-      irrigationCommandPending = true;
-
-      broadcast({
-        type: 'irrigation_start',
-        triggeredBy,
-        scope: 'all',
-      });
-
-      console.log(
-        `[IRRIGATE-ALL] Command issued — ` +
-        `${nodes.rows.length} node(s) marked active, ` +
-        'pump flag set'
-      );
 
       // Auto-complete after 10 s
       setTimeout(async () => {
@@ -824,17 +839,31 @@ app.post(
           );
         }
       }, 10000);
-
-      return res.json({
-        ok: true,
-        nodesTriggered: nodes.rows.length,
-      });
     } catch (err) {
-      return res.status(500).json({
-        message: 'Server error',
-        error: err.message,
-      });
+      dbWarning = err.message;
+
+      console.error(
+        '[IRRIGATE-ALL] Database bookkeeping failed (pump command was still queued):',
+        err.message
+      );
     }
+
+    broadcast({
+      type: 'irrigation_start',
+      triggeredBy,
+      scope: 'all',
+    });
+
+    console.log(
+      `[IRRIGATE-ALL] Command issued — ${nodesTriggered} node(s) marked active` +
+      (dbWarning ? ` (DB warning: ${dbWarning})` : '')
+    );
+
+    return res.json({
+      ok: true,
+      nodesTriggered,
+      ...(dbWarning ? { warning: dbWarning } : {}),
+    });
   }
 );
 
@@ -862,9 +891,273 @@ app.get('/api/irrigation/command', (req, res) => {
   });
 });
 
+// ── AFLC scheduler ───────────────────────────────────────────────────────────
+// The server (not the browser) asks the AFLC service for a decision on a fixed
+// schedule, using the node's REAL latest values from the database.
+//
+//   AFLC_INTERVAL_MS      default 600000 (10 minutes)
+//   AFLC_NODE_IDS         default NODE-01   (comma-separated node_id list)
+//   AFLC_MAX_READING_AGE_MIN  default 15    (skip a node that stopped reporting)
+
+const AFLC_INTERVAL_MS =
+  Number(process.env.AFLC_INTERVAL_MS) || 10 * 60 * 1000;
+
+const AFLC_NODE_IDS = (process.env.AFLC_NODE_IDS || 'NODE-01')
+  .split(',')
+  .map((s) => s.trim())
+  .filter(Boolean);
+
+const AFLC_MAX_READING_AGE_MIN =
+  Number(process.env.AFLC_MAX_READING_AGE_MIN) || 15;
+
+// ── Heartbeat: what the scheduler is doing right now ─────────────────────────
+// Read by GET /api/aflc/status so the dashboard can prove the AFLC is alive.
+const aflcStatus = {
+  intervalMs: AFLC_INTERVAL_MS,
+  maxReadingAgeMin: AFLC_MAX_READING_AGE_MIN,
+  bootAt: Date.now(),
+  running: false,
+  cycleCount: 0,
+  lastStartedAt: null,
+  lastFinishedAt: null,
+  lastError: null,
+  nextRunAt: null,
+  nodes: {}, // node_id -> { nodeId, outcome: decided|skipped|failed, detail, at }
+};
+
+function noteAflcNode(nodeId, outcome, detail) {
+  aflcStatus.nodes[nodeId] = { nodeId, outcome, detail, at: Date.now() };
+}
+
+async function storeAflcDecision(nodeDbId, decision) {
+  await pool.query(
+    `INSERT INTO aflc_decisions (
+       node_id,
+       decision,
+       confidence,
+       reason,
+       ecl,
+       chs,
+       stress_score,
+       demand_pct,
+       demand_bracket,
+       hold_delay_sec,
+       pump_duration_sec,
+       base_duration_sec,
+       adaptive_gain_sec,
+       condition_persisted_sec,
+       deviations
+     )
+     VALUES (
+       $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,
+       $11,$12,$13,$14,$15
+     )`,
+    [
+      nodeDbId,
+      decision.decision,
+      decision.confidence,
+      decision.reason,
+      decision.ecl ?? null,
+      decision.chs ?? null,
+      decision.stressScore ?? null,
+      decision.demandPct ?? null,
+      decision.demandBracket ?? null,
+      decision.holdDelaySec ?? null,
+      decision.pumpDurationSec ?? null,
+      decision.baseDurationSec ?? null,
+      decision.adaptiveGainSec ?? null,
+      decision.conditionPersistedSec ?? null,
+      decision.deviations
+        ? JSON.stringify(decision.deviations)
+        : null,
+    ]
+  );
+}
+
+let aflcRunning = false;
+
+async function runAflcCycle() {
+  if (aflcRunning) return; // never overlap two cycles
+  aflcRunning = true;
+  aflcStatus.running = true;
+  aflcStatus.lastStartedAt = Date.now();
+  aflcStatus.lastError = null;
+
+  try {
+    const { rows } = await pool.query(
+      `SELECT n.id,
+              n.node_id,
+              n.temperature,
+              n.humidity,
+              n.co2,
+              n.lux,
+              (SELECT MAX(r.recorded_at)
+                 FROM sensor_readings r
+                WHERE r.node_id = n.node_id) AS last_reading
+       FROM nodes n
+       WHERE n.is_active = true
+         AND n.node_id = ANY($1)
+       ORDER BY n.id`,
+      [AFLC_NODE_IDS]
+    );
+
+    for (const n of rows) {
+      const ageMin = n.last_reading
+        ? (Date.now() - new Date(n.last_reading).getTime()) / 60000
+        : Infinity;
+
+      if (ageMin > AFLC_MAX_READING_AGE_MIN) {
+        console.log(
+          `[AFLC] ${n.node_id} skipped — no sensor reading in the last ` +
+          `${AFLC_MAX_READING_AGE_MIN} min`
+        );
+        noteAflcNode(
+          n.node_id,
+          'skipped',
+          `No sensor reading in the last ${AFLC_MAX_READING_AGE_MIN} min`
+        );
+        continue;
+      }
+
+      if ([n.temperature, n.humidity, n.co2, n.lux].some((v) => v === null)) {
+        console.log(`[AFLC] ${n.node_id} skipped — incomplete sensor values`);
+        noteAflcNode(n.node_id, 'skipped', 'Incomplete sensor values');
+        continue;
+      }
+
+      try {
+        const response = await fetch(
+          `${AFLC_SERVICE_URL}/aflc/${n.id}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              temperature: Number(n.temperature),
+              humidity: Number(n.humidity),
+              co2: Number(n.co2),
+              light: Number(n.lux),
+            }),
+            signal: AbortSignal.timeout(20000),
+          }
+        );
+
+        if (!response.ok) {
+          throw new Error(`AFLC service returned ${response.status}`);
+        }
+
+        const decision = await response.json();
+        await storeAflcDecision(n.id, decision);
+
+        console.log(
+          `[AFLC] ${n.node_id} → ${decision.decision} ` +
+          `(${decision.ecl}, pump ${decision.pumpDurationSec}s)`
+        );
+        noteAflcNode(
+          n.node_id,
+          'decided',
+          `${decision.decision} · ${decision.ecl}`
+        );
+      } catch (err) {
+        console.error(`[AFLC] ${n.node_id} cycle failed:`, err.message);
+        noteAflcNode(n.node_id, 'failed', err.message);
+      }
+    }
+
+    // configured node ids that matched no active node in the DB
+    const found = new Set(rows.map((r) => r.node_id));
+    for (const id of AFLC_NODE_IDS) {
+      if (!found.has(id)) {
+        noteAflcNode(id, 'skipped', 'Node not found or not active');
+      }
+    }
+  } catch (err) {
+    console.error('[AFLC] Scheduler error:', err.message);
+    aflcStatus.lastError = err.message;
+  } finally {
+    aflcRunning = false;
+    aflcStatus.running = false;
+    aflcStatus.lastFinishedAt = Date.now();
+    aflcStatus.cycleCount += 1;
+  }
+}
+
+function startAflcScheduler() {
+  console.log(
+    `[AFLC] Scheduler on — every ${Math.round(AFLC_INTERVAL_MS / 60000)} min ` +
+    `for ${AFLC_NODE_IDS.join(', ')}`
+  );
+  // first decision shortly after boot (lets the sensors report first), then
+  // every AFLC_INTERVAL_MS. A timeout chain (not setInterval) so the exact
+  // time of the next run is always known and can be shown on the dashboard.
+  const scheduleNext = (delayMs) => {
+    aflcStatus.nextRunAt = Date.now() + delayMs;
+    setTimeout(async () => {
+      await runAflcCycle(); // never throws (handles its own errors)
+      scheduleNext(AFLC_INTERVAL_MS);
+    }, delayMs);
+  };
+  scheduleNext(30 * 1000);
+}
+
 // ═════════════════════════════════════════════════════════════════════════════
 // AFLC ROUTE
 // ═════════════════════════════════════════════════════════════════════════════
+
+/**
+ * GET /api/aflc/status
+ *
+ * Heartbeat for the dashboard: is the scheduler alive, is it thinking right
+ * now, when does it run next, what happened to each node last cycle, and the
+ * most recent decisions.
+ */
+app.get('/api/aflc/status', requireAuth, async (_req, res) => {
+  let recent = [];
+  try {
+    const { rows } = await pool.query(
+      `SELECT d.decision,
+              d.confidence,
+              d.reason,
+              d.ecl,
+              d.chs,
+              d.stress_score,
+              d.demand_pct,
+              d.hold_delay_sec,
+              d.pump_duration_sec,
+              d.condition_persisted_sec,
+              d.created_at,
+              n.node_id AS node_label
+         FROM aflc_decisions d
+         LEFT JOIN nodes n ON n.id = d.node_id
+        ORDER BY d.created_at DESC
+        LIMIT 12`
+    );
+    recent = rows;
+  } catch (err) {
+    console.error('[AFLC] status query failed:', err.message);
+  }
+
+  res.json({
+    serverNow: Date.now(),
+    ...aflcStatus,
+    nodes: Object.values(aflcStatus.nodes),
+    recent,
+  });
+});
+
+/**
+ * POST /api/aflc/run-now
+ *
+ * Runs one AFLC cycle immediately (same code path as the scheduler) so you
+ * can watch it work without waiting for the next tick. Does not move the
+ * scheduled next run.
+ */
+app.post('/api/aflc/run-now', requireAuth, async (_req, res) => {
+  if (aflcRunning) {
+    return res.status(409).json({ message: 'An AFLC cycle is already running' });
+  }
+  await runAflcCycle();
+  res.json({ ok: true, lastFinishedAt: aflcStatus.lastFinishedAt });
+});
 
 /**
  * POST /api/aflc/:id
@@ -912,48 +1205,7 @@ app.post(
 
       const decision = await response.json();
 
-      await pool.query(
-        `INSERT INTO aflc_decisions (
-           node_id,
-           decision,
-           confidence,
-           reason,
-           ecl,
-           chs,
-           stress_score,
-           demand_pct,
-           demand_bracket,
-           hold_delay_sec,
-           pump_duration_sec,
-           base_duration_sec,
-           adaptive_gain_sec,
-           condition_persisted_sec,
-           deviations
-         )
-         VALUES (
-           $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,
-           $11,$12,$13,$14,$15
-         )`,
-        [
-          id,
-          decision.decision,
-          decision.confidence,
-          decision.reason,
-          decision.ecl ?? null,
-          decision.chs ?? null,
-          decision.stressScore ?? null,
-          decision.demandPct ?? null,
-          decision.demandBracket ?? null,
-          decision.holdDelaySec ?? null,
-          decision.pumpDurationSec ?? null,
-          decision.baseDurationSec ?? null,
-          decision.adaptiveGainSec ?? null,
-          decision.conditionPersistedSec ?? null,
-          decision.deviations
-            ? JSON.stringify(decision.deviations)
-            : null,
-        ]
-      );
+      await storeAflcDecision(id, decision);
 
       return res.json(decision);
     } catch (err) {
@@ -1038,8 +1290,8 @@ app.get(
  *   ph_voltage,
  *   tds_ppm,
  *   tds_raw,
- *   turbidity_ntu,
- *   turbidity_raw,
+ *   clarity_pct,        // water clarity, 0-100 %  (100 = clear, higher is better)
+ *   turbidity_raw,      // turbidity probe voltage (V)
  *   water_present,
  *   motor_running,
  *   motor_state,
@@ -1050,7 +1302,7 @@ app.get(
  *
  * ph              → water_ph
  * tds_ppm         → tds
- * turbidity_ntu   → turbidity
+ * clarity_pct     → clarity
  * water_present   → water_level_triggered
  *
  * INVERTED:
@@ -1068,7 +1320,8 @@ app.post('/api/reservoir', async (req, res) => {
     ph_voltage,
     tds_ppm,
     tds_raw,
-    turbidity_ntu,
+    clarity_pct,
+    turbidity_ntu, // LEGACY firmware only, see below
     turbidity_raw,
     water_present,
     motor_running,
@@ -1076,9 +1329,25 @@ app.post('/api/reservoir', async (req, res) => {
     ts,
   } = req.body;
 
+  // Clarity is stored as a 0-100 % value (higher = clearer). Older node
+  // firmware sent a 0-100 "turbidity index" (lower = better, 50 = limit) as
+  // turbidity_ntu; convert it so an un-reflashed node keeps working:
+  //   index 0 -> 100 %,  index 50 -> 85 %,  index 100 -> 70 %
+  let clarity = null;
+  if (clarity_pct !== undefined && clarity_pct !== null) {
+    clarity = Number(clarity_pct);
+  } else if (turbidity_ntu !== undefined && turbidity_ntu !== null) {
+    clarity = 100 - Number(turbidity_ntu) * 0.3;
+  }
+  clarity = Number.isFinite(clarity)
+    ? Math.round(Math.min(100, Math.max(0, clarity)) * 10) / 10
+    : null;
+
   if (
     ph === undefined &&
-    tds_ppm === undefined
+    tds_ppm === undefined &&
+    clarity === null &&
+    water_present === undefined
   ) {
     return res.status(400).json({
       message: 'No sensor fields received',
@@ -1097,7 +1366,7 @@ app.post('/api/reservoir', async (req, res) => {
          id,
          water_ph,
          tds,
-         turbidity,
+         clarity,
          water_level_triggered,
          motor_running,
          motor_state,
@@ -1115,22 +1384,22 @@ app.post('/api/reservoir', async (req, res) => {
        )
        ON CONFLICT (id) DO UPDATE SET
          water_ph =
-           EXCLUDED.water_ph,
+           COALESCE(EXCLUDED.water_ph, reservoir.water_ph),
          tds =
-           EXCLUDED.tds,
-         turbidity =
-           EXCLUDED.turbidity,
+           COALESCE(EXCLUDED.tds, reservoir.tds),
+         clarity =
+           COALESCE(EXCLUDED.clarity, reservoir.clarity),
          water_level_triggered =
            EXCLUDED.water_level_triggered,
          motor_running =
-           EXCLUDED.motor_running,
+           COALESCE(EXCLUDED.motor_running, reservoir.motor_running),
          motor_state =
-           EXCLUDED.motor_state,
+           COALESCE(EXCLUDED.motor_state, reservoir.motor_state),
          updated_at = NOW()`,
       [
         ph ?? null,
         tds_ppm ?? null,
-        turbidity_ntu ?? null,
+        clarity,
         waterLevelTriggered,
         motor_running ?? null,
         motor_state ?? null,
@@ -1145,7 +1414,7 @@ app.post('/api/reservoir', async (req, res) => {
          ph_voltage,
          tds,
          tds_raw,
-         turbidity,
+         clarity,
          turbidity_raw,
          water_present,
          water_level_triggered,
@@ -1161,7 +1430,7 @@ app.post('/api/reservoir', async (req, res) => {
         ph_voltage ?? null,
         tds_ppm ?? null,
         tds_raw ?? null,
-        turbidity_ntu ?? null,
+        clarity,
         turbidity_raw ?? null,
         water_present ?? null,
         waterLevelTriggered,
@@ -1185,26 +1454,18 @@ app.post('/api/reservoir', async (req, res) => {
     console.log(
       `[ESP32-RESERVOIR] pH=${ph} (${ph_voltage}V) | ` +
       `TDS=${tds_ppm}ppm | ` +
-      `Turbidity=${turbidity_ntu}NTU | ` +
+      `Clarity=${clarity}% | ` +
       `Water=${water_present ? 'OK' : 'LOW!'} | ` +
       `Motor=${motor_state} | ` +
       `ts=${ts ?? 'n/a'}`
     );
 
-    // Consume pending motor command
-    const triggerMotor = motorCommandPending;
-
-    if (triggerMotor) {
-      motorCommandPending = false;
-
-      console.log(
-        '[MOTOR] Command dispatched to ESP32'
-      );
-    }
-
+    // The stepper lives on the actuator board, which polls
+    // GET /api/motor/command. The reservoir sensor board must not
+    // consume the motor flag, so it is always false here.
     return res.json({
       status: 'ok',
-      motor_command: triggerMotor,
+      motor_command: false,
     });
   } catch (err) {
     console.error(
@@ -1241,6 +1502,121 @@ app.post(
   }
 );
 
+// Safety net: if the actuator reports RUNNING but never reports STOPPED
+// (power dip, reset, Wi-Fi drop), clear the stuck state so the dashboard
+// button isn't locked forever.
+const MOTOR_STATE_TTL_MS = 20000; // motor runs 15 s, so 20 s is a safe ceiling
+let motorWatchdog = null;
+
+async function forceMotorStopped(reason) {
+  try {
+    await pool.query(
+      `UPDATE reservoir
+       SET motor_running = false,
+           motor_state = 'STOPPED',
+           updated_at = NOW()
+       WHERE id = 1`
+    );
+
+    broadcast({
+      type: 'reservoir_update',
+    });
+
+    console.log(`[MOTOR] State forced to STOPPED (${reason})`);
+  } catch (err) {
+    console.error('[MOTOR] Could not reset state:', err.message);
+  }
+}
+
+// GET /api/motor/command
+// Polled by the actuator ESP32 every ~2 s. Returns the pending
+// "run motor" flag and clears it. No auth — device endpoint.
+
+app.get('/api/motor/command', (_req, res) => {
+  const pending = motorCommandPending;
+
+  if (pending) {
+    motorCommandPending = false;
+
+    console.log(
+      '[MOTOR] Command polled by actuator ESP32 — flag cleared'
+    );
+  }
+
+  return res.json({
+    motor_command: pending,
+  });
+});
+
+// POST /api/motor/status
+// Actuator ESP32 reports { motor_running, motor_state } when it changes.
+// No auth — device endpoint.
+
+app.post('/api/motor/status', async (req, res) => {
+  const { motor_running, motor_state } = req.body;
+
+  if (motor_running === undefined) {
+    return res.status(400).json({
+      message: 'motor_running is required',
+    });
+  }
+
+  try {
+    await pool.query(
+      `INSERT INTO reservoir (
+         id,
+         motor_running,
+         motor_state,
+         water_level_triggered,
+         updated_at
+       )
+       VALUES (1, $1, $2, false, NOW())
+       ON CONFLICT (id) DO UPDATE SET
+         motor_running = EXCLUDED.motor_running,
+         motor_state = EXCLUDED.motor_state,
+         updated_at = NOW()`,
+      [
+        Boolean(motor_running),
+        motor_state ?? (motor_running ? 'RUNNING' : 'STOPPED'),
+      ]
+    );
+
+    broadcast({
+      type: 'reservoir_update',
+    });
+
+    if (motorWatchdog) {
+      clearTimeout(motorWatchdog);
+      motorWatchdog = null;
+    }
+
+    if (motor_running) {
+      motorWatchdog = setTimeout(() => {
+        motorWatchdog = null;
+        forceMotorStopped('no STOPPED report from actuator within 20 s');
+      }, MOTOR_STATE_TTL_MS);
+    }
+
+    console.log(
+      `[ESP32-ACTUATOR] Motor ${motor_state ?? (motor_running ? 'RUNNING' : 'STOPPED')}`
+    );
+
+    return res.json({
+      status: 'ok',
+    });
+  } catch (err) {
+    console.error(
+      '[ESP32-ACTUATOR] Status error:',
+      err.message
+    );
+
+    return res.status(500).json({
+      message: 'Server error',
+      error: err.message,
+    });
+  }
+});
+
 // GET /api/reservoir
 // Polled by App.jsx every 8 s, requires auth
 
@@ -1257,7 +1633,7 @@ app.get(
         return res.json({
           water_ph: 6.2,
           tds: 850,
-          turbidity: 12,
+          clarity: 98,
           water_level_triggered: false,
           motor_running: false,
           motor_state: 'STOPPED',
@@ -1335,6 +1711,74 @@ app.get(
  * 5. Server broadcasts camera_image
  *    over WebSocket
  */
+
+// ═════════════════════════════════════════════════════════════════════════════
+// EXCEL EXPORT (requires login)
+// ═════════════════════════════════════════════════════════════════════════════
+
+// GET /api/export/options
+// What the Export dialog can offer: sheets, live row counts, nodes.
+
+app.get('/api/export/options', requireAuth, async (_req, res) => {
+  try {
+    return res.json(await getExportOptions(pool));
+  } catch (err) {
+    console.error('[EXPORT] Options error:', err.message);
+
+    return res.status(500).json({
+      message: 'Could not read export options',
+      error: err.message,
+    });
+  }
+});
+
+// GET /api/export/xlsx?sheets=&limit=&range=&from=&to=&node=
+// Builds the designed workbook straight from the database.
+
+app.get('/api/export/xlsx', requireAuth, async (req, res) => {
+  const started = Date.now();
+
+  try {
+    const params = parseExportParams(req.query);
+    const workbook = await buildWorkbook(pool, params, req.user);
+
+    const stamp = new Date()
+      .toLocaleString('sv-SE', { timeZone: process.env.EXPORT_TIMEZONE || 'Asia/Manila' })
+      .replace(' ', '_')
+      .replace(/:/g, '')
+      .slice(0, 15);
+
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    );
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="VertiFarmVision_${stamp}.xlsx"`
+    );
+    res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition');
+
+    await workbook.xlsx.write(res);
+    res.end();
+
+    console.log(
+      `[EXPORT] ${req.user?.email || 'user'} exported [${params.sheets.join(', ')}] ` +
+      `limit=${params.limit} range=${params.range.key} node=${params.node || 'all'} ` +
+      `in ${Date.now() - started} ms`
+    );
+  } catch (err) {
+    console.error('[EXPORT] Failed:', err.message);
+
+    if (res.headersSent) {
+      return res.destroy();
+    }
+
+    return res.status(err.status || 500).json({
+      message: err.status ? err.message : 'Export failed',
+      error: err.message,
+    });
+  }
+});
 
 // GET /api/camera/command
 // Polled by ESP32 every few seconds
@@ -1567,11 +2011,7 @@ app.get(
       const result = await pool.query(
         `SELECT *
          FROM irrigation_log
-         WHERE node_id = (
-           SELECT node_id
-           FROM nodes
-           WHERE id = $1
-         )
+         WHERE node_id = $1
          ORDER BY triggered_at DESC
          LIMIT $2`,
         [
@@ -1591,18 +2031,61 @@ app.get(
 );
 
 // ═════════════════════════════════════════════════════════════════════════════
+// DATABASE MIGRATION — water clarity (%)
+// The reservoir used to store a 0-100 "turbidity index" (lower = better).
+// It now stores real clarity % (higher = better) in a `clarity` column.
+// Idempotent: safe to run on every start. Old rows are converted once with
+// the same formula the old firmware used (index 0->100%, 50->85%, 100->70%).
+// ═════════════════════════════════════════════════════════════════════════════
+
+async function ensureClarityColumns() {
+  try {
+    await pool.query('ALTER TABLE reservoir     ADD COLUMN IF NOT EXISTS clarity NUMERIC(5,1)');
+    await pool.query('ALTER TABLE reservoir_log ADD COLUMN IF NOT EXISTS clarity NUMERIC(5,1)');
+
+    const backfill = (table) =>
+      pool.query(
+        `UPDATE ${table}
+            SET clarity = GREATEST(0, LEAST(100, ROUND((100 - turbidity * 0.3)::numeric, 1)))
+          WHERE clarity IS NULL AND turbidity IS NOT NULL`
+      );
+    const a = await backfill('reservoir');
+    const b = await backfill('reservoir_log');
+
+    console.log(
+      `[DB] clarity columns ready (converted ${a.rowCount} live + ${b.rowCount} log rows from the old turbidity index)`
+    );
+  } catch (err) {
+    console.error(
+      '[DB] Could not add the clarity columns:', err.message,
+      '\n     Run this once as the database owner:\n' +
+      '       ALTER TABLE reservoir     ADD COLUMN IF NOT EXISTS clarity NUMERIC(5,1);\n' +
+      '       ALTER TABLE reservoir_log ADD COLUMN IF NOT EXISTS clarity NUMERIC(5,1);'
+    );
+  }
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
 // START SERVER
 // ═════════════════════════════════════════════════════════════════════════════
 
 const PORT =
   process.env.PORT || 3001;
 
-server.listen(
-  PORT,
-  '0.0.0.0',
-  () => {
-    console.log(
-      `🚀 Server running on http://0.0.0.0:${PORT}`
-    );
-  }
-);
+// A "RUNNING" left over from before a restart can't be true anymore.
+forceMotorStopped('server startup');
+
+// Make sure the clarity columns exist before the ESP32 starts posting to them.
+ensureClarityColumns().finally(() => {
+  server.listen(
+    PORT,
+    '0.0.0.0',
+    () => {
+      console.log(
+        `🚀 Server running on http://0.0.0.0:${PORT}`
+      );
+
+      startAflcScheduler();
+    }
+  );
+});

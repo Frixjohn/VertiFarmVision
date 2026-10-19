@@ -152,7 +152,6 @@ const CONNECTION_LABEL = { connected: "Live", connecting: "Connecting", offline:
 // ── Main App ──────────────────────────────────────────────────────────────────
 function AppInner() {
   const [theme, setTheme] = useState(() => localStorage.getItem("farmDash-theme") || "light");
-  const [textSize, setTextSize] = useState(() => localStorage.getItem("farmDash-textsize") || "normal");
   const [activePage, setActivePage] = useState("Overview");
   const [toasts, setToasts] = useState([]);
   const [notificationLog, setNotificationLog] = useState([]);
@@ -183,7 +182,7 @@ function AppInner() {
   const [reservoirData, setReservoirData] = useState({
     waterPH: 6.2,
     tds: 850,
-    turbidity: 12,
+    clarity: 98,
     waterLevelTriggered: false,
     motorRunning: false,
     motorState: 'STOPPED',
@@ -217,16 +216,30 @@ function AppInner() {
   // stay light for a frame on every load (they inherit --bg from :root until
   // this class lands), even though .app itself is already themed correctly.
   // That's what reads as "dark mode is broken" / a flash of light theme.
+  const themeFirstRun = useRef(true);
   useLayoutEffect(() => {
+    const root = document.documentElement;
     localStorage.setItem("farmDash-theme", theme);
+
+    // Cross-fade colours on a user-triggered switch (not on first load, so
+    // there is no fade-in flash). See .theme-fade in base.css.
+    let timer;
+    if (!themeFirstRun.current) {
+      root.classList.add("theme-fade");
+      timer = setTimeout(() => root.classList.remove("theme-fade"), 500);
+    }
+    themeFirstRun.current = false;
+
     // Apply class to <html> so CSS vars cascade to html/body/#root backgrounds
-    document.documentElement.classList.toggle("theme-dark", theme === "dark");
+    root.classList.toggle("theme-dark", theme === "dark");
+    return () => clearTimeout(timer);
   }, [theme]);
 
+  // Clean up leftovers from the removed text-size setting
   useLayoutEffect(() => {
-    localStorage.setItem("farmDash-textsize", textSize);
-    document.documentElement.classList.toggle("text-large", textSize === "large");
-  }, [textSize]);
+    localStorage.removeItem("farmDash-textsize");
+    document.documentElement.classList.remove("text-large");
+  }, []);
 
   // ── Load nodes from PostgreSQL ─────────────────────────────────────────────
   const loadNodes = useCallback(async () => {
@@ -236,8 +249,11 @@ function AppInner() {
       const ids = {};
       const keyMap = { "NODE-01": "node1" };
 
+      const knownKeys = new Set(NODES.map((n) => n.key));
+
       rows.forEach((row) => {
         const key = keyMap[row.name] || row.name.toLowerCase().replace(/[^a-z0-9]/g, "");
+        if (!knownKeys.has(key)) return; // ignore nodes that aren't in NODES (e.g. a stray NODE-02)
         mapped[key] = {
           temperature:      parseFloat(row.temperature),
           humidity:         parseFloat(row.humidity),
@@ -249,9 +265,7 @@ function AppInner() {
         ids[key] = row.id;
       });
       // Merge into defaults so node1 is never undefined even if the server
-      // returns 0 rows. Any row not in NODES (e.g. a stray NODE-02 posting)
-      // still lands in nodeData/nodeIds under its own key, but nothing in
-      // NODES iterates over it, so it never reaches the UI.
+      // returns 0 rows. Rows not in NODES are dropped above.
       setNodeData(prev => ({ ...prev, ...mapped }));
       setNodeIds(ids);
       setDbStatus("connected");
@@ -307,7 +321,7 @@ function AppInner() {
       setReservoirData({
         waterPH:             parseFloat(data.water_ph ?? 6.2),
         tds:                 parseFloat(data.tds ?? 850),
-        turbidity:           parseFloat(data.turbidity ?? 12),
+        clarity:             parseFloat(data.clarity ?? 98),
         waterLevelTriggered: Boolean(data.water_level_triggered),
         motorRunning:        Boolean(data.motor_running),
         motorState:          data.motor_state ?? 'STOPPED',
@@ -464,21 +478,9 @@ const uploadImage = useCallback(async (file) => {
     return () => ws.close();
   }, [user, loadNodes, loadReservoir, showImageNotification]);
 
-  // ── Log AFLC decisions to DB on every data change ─────────────────────────
-  useEffect(() => {
-    if (!user || Object.keys(nodeIds).length === 0) return;
-    Object.entries(nodeData).forEach(([nodeName, data]) => {
-      const nodeId = nodeIds[nodeName];
-      if (!nodeId) return;
-      api.post(`/aflc/${nodeId}`, {
-        temperature: data.temperature,
-        humidity: data.humidity,
-        co2: data.co2,
-        light: data.lux,
-      }).catch(() => {});
-    });
-  }, [nodeData, nodeIds, user]);
-
+  // AFLC decisions are now made by the server every 10 minutes from the real
+  // database values (see runAflcCycle in server.js). The browser only displays
+  // the latest one (loadAflc) — it no longer posts decisions itself.
 
   // ── Update sensor → save to DB ─────────────────────────────────────────────
   const updateSensor = useCallback(async (node, sensor, value) => {
@@ -557,7 +559,7 @@ const uploadImage = useCallback(async (file) => {
 
   useEffect(() => {
     if (!reservoirLoaded) return;
-    pushReservoirHistory({ ph: reservoirData.waterPH, tds: reservoirData.tds, turbidity: reservoirData.turbidity });
+    pushReservoirHistory({ ph: reservoirData.waterPH, tds: reservoirData.tds, clarity: reservoirData.clarity });
   }, [reservoirData, reservoirLoaded]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Auth gates ─────────────────────────────────────────────────────────────
@@ -639,14 +641,17 @@ const uploadImage = useCallback(async (file) => {
       {/* ── Main ── */}
       <main className={`main ${activePage === "Overview" ? "fit" : ""}`} id="main" tabIndex={-1}>
         <header className="main-head">
-          <div>
-            <h2 className="page-title">{activePage}</h2>
-            <p className="muted page-sub">{page.sub}</p>
+          <div className="head-title">
+            <img src="/images.png" alt="" className="head-logo" />
+            <div>
+              <h2 className="page-title">{activePage}</h2>
+              <p className="muted page-sub">{page.sub}</p>
+            </div>
           </div>
           <div className="actions">
             <span className={`conn conn-${dbStatus}`} role="status">
               <span className="dot" />
-              {CONNECTION_LABEL[dbStatus]}
+              <span className="conn-label">{CONNECTION_LABEL[dbStatus]}</span>
               {dbStatus === "connected" && lastUpdated && <span className="conn-time">· {timeAgo(lastUpdated, now)}</span>}
             </span>
             <button
@@ -727,7 +732,7 @@ const uploadImage = useCallback(async (file) => {
         )}
 
         {activePage === "Settings" && (
-          <SettingsView theme={theme} setTheme={setTheme} textSize={textSize} setTextSize={setTextSize} onLogout={logout} />
+          <SettingsView theme={theme} setTheme={setTheme} onLogout={logout} />
         )}
       </main>
 
@@ -736,7 +741,12 @@ const uploadImage = useCallback(async (file) => {
         {NAV.map((p) => (
           <button key={p.name} className={activePage === p.name ? "active" : ""}
             aria-current={activePage === p.name ? "page" : undefined} onClick={() => setActivePage(p.name)}>
-            <Icon name={p.icon} size={20} />
+            <span className="tab-icon">
+              <Icon name={p.icon} size={22} />
+              {p.name === "Towers" && reservoirData.waterLevelTriggered && (
+                <span className="tab-alert-dot" aria-label="Water level alert" />
+              )}
+            </span>
             <span>{p.name}</span>
           </button>
         ))}

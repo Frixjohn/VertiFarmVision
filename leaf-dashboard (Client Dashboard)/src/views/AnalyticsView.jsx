@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import Icon from "../components/Icon";
+import AflcHeartbeat from "../components/AflcHeartbeat";
 import { HealthSummary, StatCard, MetricCard, AflcCard, ReservoirPanel, PlantHealthCard } from "../components/dashboard";
 import { SectionHeader, Segmented } from "../components/ui";
 import { averageValues } from "../components/charts/series";
@@ -23,6 +24,8 @@ export default function AnalyticsView({
           <StatCard key={m} metric={m} value={averages[m]} history={averageValues(nodeHistory, m)} />
         ))}
       </section>
+
+      <AflcHeartbeat now={now} />
 
       <section>
         <SectionHeader title="AFLC decisions · Tower 1" subtitle="Adaptive fuzzy logic controller: irrigation advice per node" />

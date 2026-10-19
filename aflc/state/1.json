@@ -1,28 +1,28 @@
 {
   "gains": {},
-  "condition_since": 1790314013.867,
-  "condition_key": "High Stress|Healthy",
+  "condition_since": 1791539604.837945,
+  "condition_key": "Critical|Healthy",
   "last_decision": {
     "node": "1",
     "decision": "IRRIGATE",
-    "confidence": 82.5,
-    "reason": "High Stress conditions confirmed for 10203s (hold 60s, plant healthy) \u2014 running pump 10s.",
-    "ecl": "High Stress",
+    "confidence": 90.0,
+    "reason": "Critical conditions confirmed for 440376s (hold 120s, plant healthy) \u2014 running pump 10s.",
+    "ecl": "Critical",
     "chs": "Healthy",
-    "stressScore": 0.5625,
+    "stressScore": 0.75,
     "deviations": {
-      "co2": 0.0,
-      "temperature": 0.25,
+      "co2": 1.0,
+      "temperature": 0.0,
       "humidity": 1.0,
       "light": 1.0
     },
-    "holdDelaySec": 60,
-    "conditionPersistedSec": 10203.9,
-    "demandPct": 65.0,
+    "holdDelaySec": 120,
+    "conditionPersistedSec": 440376.8,
+    "demandPct": 70.0,
     "baseDurationSec": 10,
     "adaptiveGainSec": 0.0,
     "pumpDurationSec": 10,
     "demandBracket": 3,
-    "timestamp": 1790324217.7420976
+    "timestamp": 1791979981.6633334
   }
 }

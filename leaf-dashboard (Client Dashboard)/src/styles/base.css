@@ -78,7 +78,20 @@ main:focus { outline: none; }
 .shape.circle { border-radius: 50%; }
 .shape.diamond { transform: rotate(45deg); border-radius: 2px; width: 9px; height: 9px; }
 
+/* Smooth light <-> dark switch.
+   App.jsx adds .theme-fade to <html> for ~0.5s around a theme change, so
+   every colour cross-fades together. It is only present during the switch,
+   so normal hover/press transitions are never affected. */
+html.theme-fade,
+html.theme-fade *,
+html.theme-fade *::before,
+html.theme-fade *::after {
+  transition: background-color 0.4s ease, border-color 0.4s ease, color 0.4s ease,
+              fill 0.4s ease, stroke 0.4s ease, box-shadow 0.4s ease !important;
+}
+
 /* Respect users who ask for less motion */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; transition-duration: 0.001ms !important; }
+  html.theme-fade, html.theme-fade *, html.theme-fade *::before, html.theme-fade *::after { transition: none !important; }
 }

@@ -194,11 +194,11 @@ export default function TowersView({
           {low && <span className="pill tone-danger pulse"><Icon name="alert" size={12} />Water level low</span>}
         </SectionHeader>
         <div className="sensor-grid">
-          {["ph", "tds", "turbidity"].map((m) => (
+          {["ph", "tds", "clarity"].map((m) => (
             <SensorCard
               key={m}
               metric={m}
-              value={{ ph: reservoir.waterPH, tds: reservoir.tds, turbidity: reservoir.turbidity }[m]}
+              value={{ ph: reservoir.waterPH, tds: reservoir.tds, clarity: reservoir.clarity }[m]}
               history={reservoirHistory.map((p) => p[m])}
             />
           ))}

@@ -4,7 +4,7 @@ import { Segmented } from "../components/ui";
 
 const ALERTS = ["Temperature alerts", "CO₂ alerts", "Water level alerts", "AFLC notifications"];
 
-export default function SettingsView({ theme, setTheme, textSize, setTextSize, onLogout }) {
+export default function SettingsView({ theme, setTheme, onLogout }) {
   return (
     <div className="grid-3 settings-grid">
       <section className="card">
@@ -14,12 +14,6 @@ export default function SettingsView({ theme, setTheme, textSize, setTextSize, o
           <div><label>Theme</label><p className="muted">Dark is easier on the eyes in a grow room.</p></div>
           <Segmented label="Theme" value={theme} onChange={setTheme}
             options={[{ key: "light", label: "Light", icon: "sun" }, { key: "dark", label: "Dark", icon: "moon" }]} />
-        </div>
-
-        <div className="setting-item">
-          <div><label>Text size</label><p className="muted">Scales every label, value and chart.</p></div>
-          <Segmented label="Text size" value={textSize} onChange={setTextSize}
-            options={[{ key: "normal", label: "Normal" }, { key: "large", label: "Large" }]} />
         </div>
       </section>
 

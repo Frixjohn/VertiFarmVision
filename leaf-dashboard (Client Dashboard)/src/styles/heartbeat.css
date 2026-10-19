@@ -1,0 +1,86 @@
+/* ============================================================
+   heartbeat.css — "is the AFLC alive?" card (Analytics)
+   Colour is never the only signal: state is also spelled out in
+   words, and the trace stops moving when the controller is not OK.
+   ============================================================ */
+.hb { display: flex; flex-direction: column; gap: 12px; --hb: var(--brand); }
+.hb--thinking { --hb: var(--info); }
+.hb--stalled  { --hb: var(--warning); }
+.hb--offline  { --hb: var(--danger); }
+.hb--connecting { --hb: var(--muted); }
+
+.hb-top { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; }
+.hb-id { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.hb-id h4 { font-size: 1.05rem; display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.hb-state { color: var(--hb); font-weight: 700; }
+.hb-sub { font-size: 0.8rem; }
+
+/* pulsing dot */
+.hb-dot { position: relative; width: 14px; height: 14px; border-radius: 50%; background: var(--hb); flex-shrink: 0; }
+.hb-dot::after {
+  content: ""; position: absolute; inset: 0; border-radius: 50%;
+  background: var(--hb); opacity: 0.5; animation: hbRipple 1.8s ease-out infinite;
+}
+.hb--thinking .hb-dot::after { animation-duration: 0.9s; }
+.hb--offline .hb-dot::after, .hb--connecting .hb-dot::after { animation: none; opacity: 0; }
+@keyframes hbRipple { from { transform: scale(1); opacity: 0.55; } to { transform: scale(2.6); opacity: 0; } }
+
+/* animated "..." while thinking */
+.hb-ellipsis { display: inline-flex; gap: 3px; margin-left: 4px; }
+.hb-ellipsis i { width: 5px; height: 5px; border-radius: 50%; background: var(--hb); animation: hbBounce 1s ease-in-out infinite; }
+.hb-ellipsis i:nth-child(2) { animation-delay: 0.15s; }
+.hb-ellipsis i:nth-child(3) { animation-delay: 0.3s; }
+@keyframes hbBounce { 0%, 80%, 100% { transform: translateY(0); opacity: 0.4; } 40% { transform: translateY(-4px); opacity: 1; } }
+
+.hb-actions { display: flex; align-items: center; gap: 14px; }
+.hb-next { display: flex; flex-direction: column; align-items: flex-end; line-height: 1.2; }
+.hb-clock { font-family: var(--font-mono); font-size: 1.4rem; font-variant-numeric: tabular-nums; color: var(--text); }
+
+/* ECG trace */
+.hb-trace { width: 100%; height: 40px; display: block; overflow: visible; }
+.hb-trace path { fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+.hb-trace-flat { stroke: var(--border-strong); }
+.hb-trace-beat { stroke: var(--hb); stroke-dasharray: 90 400; stroke-dashoffset: 490; animation: hbSweep 2.6s linear infinite; }
+.hb--thinking .hb-trace-beat { animation-duration: 1.1s; }
+.hb--offline .hb-trace-beat, .hb--connecting .hb-trace-beat { animation: none; opacity: 0; }
+@keyframes hbSweep { to { stroke-dashoffset: 0; } }
+
+/* countdown bar */
+.hb-progress { height: 6px; border-radius: var(--r-pill); background: var(--surface-3); overflow: hidden; }
+.hb-progress-fill { height: 100%; background: var(--hb); border-radius: inherit; transition: width 1s linear; }
+.hb--thinking .hb-progress-fill { width: 100% !important; animation: pulse 1s ease-in-out infinite; }
+
+.hb-meta { margin: 0; }
+.hb-error { display: flex; align-items: center; gap: 6px; margin: 0; font-size: 0.85rem; color: var(--danger); }
+
+/* last cycle, per node */
+.hb-cycle { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.hb-cycle li { display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: var(--surface-2); border-radius: var(--r-sm); font-size: 0.85rem; flex-wrap: wrap; }
+.hb-cycle .hb-when { margin-left: auto; }
+.hb-cycle-decided .icon { color: var(--success); }
+.hb-cycle-skipped .icon { color: var(--warning); }
+.hb-cycle-failed  .icon { color: var(--danger); }
+
+/* latest decision */
+.hb-latest { border-top: 1px solid var(--border); padding-top: 12px; display: flex; flex-direction: column; gap: 12px; }
+.hb-latest-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+.hb-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 8px; margin: 0; }
+.hb-facts > div { background: var(--surface-2); border-radius: var(--r-sm); padding: 8px 10px; }
+.hb-facts dt { font-size: 0.75rem; color: var(--muted); }
+.hb-facts dd { margin: 2px 0 0; font-weight: 700; font-variant-numeric: tabular-nums; }
+.hb-empty { margin: 0; font-size: 0.9rem; }
+
+/* recent decisions strip */
+.hb-history { display: flex; align-items: center; gap: 10px; }
+.hb-history ol { list-style: none; margin: 0; padding: 0; display: flex; gap: 5px; flex-wrap: wrap; }
+.hb-pip { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; border: 1px solid transparent; }
+.hb-pip.optimal  { background: var(--success-soft); color: var(--success); border-color: color-mix(in srgb, var(--success) 35%, transparent); }
+.hb-pip.monitor  { background: var(--warning-soft); color: var(--warning); border-color: color-mix(in srgb, var(--warning) 35%, transparent); }
+.hb-pip.irrigate { background: var(--info-soft);    color: var(--info);    border-color: color-mix(in srgb, var(--info) 35%, transparent); }
+
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+@media (prefers-reduced-motion: reduce) {
+  .hb-dot::after, .hb-ellipsis i, .hb-trace-beat, .hb--thinking .hb-progress-fill { animation: none; }
+  .hb-trace-beat { stroke-dasharray: none; stroke-dashoffset: 0; }
+}

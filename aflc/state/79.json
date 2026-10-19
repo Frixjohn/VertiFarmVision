@@ -1,0 +1,28 @@
+{
+  "gains": {},
+  "condition_since": 1792063876.2585313,
+  "condition_key": "High Stress|Healthy",
+  "last_decision": {
+    "node": "79",
+    "decision": "MONITOR",
+    "confidence": 87.4,
+    "reason": "High Stress conditions detected, plant healthy \u2014 confirming for 60s more before irrigating (hold delay 60s guards against overwatering a stressed reading).",
+    "ecl": "High Stress",
+    "chs": "Healthy",
+    "stressScore": 0.685,
+    "deviations": {
+      "co2": 0.74,
+      "temperature": 0.0,
+      "humidity": 1.0,
+      "light": 1.0
+    },
+    "holdDelaySec": 60,
+    "conditionPersistedSec": 0.0,
+    "demandPct": 65.0,
+    "baseDurationSec": 10,
+    "adaptiveGainSec": 0.0,
+    "pumpDurationSec": 0,
+    "demandBracket": 3,
+    "timestamp": 1792063876.2585313
+  }
+}

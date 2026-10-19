@@ -17,11 +17,11 @@ export function AuthProvider({ children }) {
 
   // On app load: check if a token exists and fetch the current user
   useEffect(() => {
-    const token = localStorage.getItem('token');
+    const token = localStorage.getItem('farmDash-token');
     if (token) {
       authService.getMe()
         .then(setUser)
-        .catch(() => localStorage.removeItem('token'))
+        .catch(() => localStorage.removeItem('farmDash-token'))
         .finally(() => setLoading(false));
     } else {
       setLoading(false);

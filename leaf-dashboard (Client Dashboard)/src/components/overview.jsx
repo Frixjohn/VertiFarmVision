@@ -116,7 +116,7 @@ export function ReservoirMini({ reservoir, onRunMotor, motorBusy, onCapture, cam
   const rows = [
     ["ph", reservoir.waterPH],
     ["tds", reservoir.tds],
-    ["turbidity", reservoir.turbidity],
+    ["clarity", reservoir.clarity],
   ];
 
   return (

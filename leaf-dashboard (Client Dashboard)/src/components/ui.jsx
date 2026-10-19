@@ -58,10 +58,17 @@ export function Segmented({ label, options, value, onChange, className = "" }) {
 const TOAST_ICON = { success: "checkCircle", error: "alert", warning: "alert", info: "info" };
 
 export function Toast({ message, type = "success", onClose }) {
+  // Keep the latest onClose in a ref so the timer starts once per toast.
+  // ToastStack passes a new inline function every render, and the app
+  // re-renders on every data poll — with onClose in the effect deps the
+  // timeout kept being cleared and restarted, so toasts never vanished.
+  const onCloseRef = useRef(onClose);
+  useEffect(() => { onCloseRef.current = onClose; });
+
   useEffect(() => {
-    const timer = setTimeout(onClose, type === "warning" ? 8000 : 3500);
+    const timer = setTimeout(() => onCloseRef.current(), type === "warning" ? 8000 : 3500);
     return () => clearTimeout(timer);
-  }, [onClose, type]);
+  }, [type]);
 
   return (
     <div className={`toast toast-${type}`}>
